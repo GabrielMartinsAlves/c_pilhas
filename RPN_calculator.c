@@ -45,7 +45,7 @@ int estaCheia(Stack* stack) {
 
 int push(Stack* stack, double valor) {
     if (estaCheia(stack)) {
-        printf("Erro: Stack overflow\n");
+        printf("Erro: Estouro de pilha\n");
         return 0;
     }
     stack->data[++stack->top] = valor;
@@ -54,7 +54,7 @@ int push(Stack* stack, double valor) {
 
 double pop(Stack* stack) {
     if (estaVazia(stack)) {
-        printf("Erro: Stack underflow\n");
+        printf("Erro: Pilha vazia\n");
         exit(1);
     }
     return stack->data[stack->top--];
