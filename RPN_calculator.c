@@ -10,19 +10,19 @@
 
 // Estrutura da pilha
 typedef struct {
-    double data[MAX_STACK_SIZE];
-    int top;
-} Stack;
+    double dados[MAX_STACK_SIZE];
+    int topo;
+} Pilha;
 
 // Estrutura para representar um token
 typedef enum {
     TOKEN_NUMBER,
     TOKEN_OPERATOR,
     TOKEN_INVALID
-} TokenType;
+} TipoToken;
 
 typedef struct {
-    TokenType type;
+    TipoToken type;
     union {
         double number;
         char operator;
@@ -31,59 +31,59 @@ typedef struct {
 
 // ========== IMPLEMENTAÇÃO DO TAD PILHA ==========
 
-void inicializaPilha(Stack* stack) {
-    stack->top = -1;
+void inicializaPilha(Pilha* pilha) {
+    pilha->topo = -1;
 }
 
-int estaVazia(Stack* stack) {
-    return stack->top == -1;
+int estaVazia(Pilha* pilha) {
+    return pilha->topo == -1;
 }
 
-int estaCheia(Stack* stack) {
-    return stack->top >= MAX_STACK_SIZE - 1;
+int estaCheia(Pilha* pilha) {
+    return pilha->topo >= MAX_STACK_SIZE - 1;
 }
 
-int push(Stack* stack, double valor) {
-    if (estaCheia(stack)) {
+int push(Pilha* pilha, double valor) {
+    if (estaCheia(pilha)) {
         printf("Erro: Stack overflow\n");
         return 0;
     }
-    stack->data[++stack->top] = valor;
+    pilha->dados[++pilha->topo] = valor;
     return 1;
 }
 
-double pop(Stack* stack) {
-    if (estaVazia(stack)) {
+double pop(Pilha* pilha) {
+    if (estaVazia(pilha)) {
         printf("Erro: Stack underflow\n");
         exit(1);
     }
-    return stack->data[stack->top--];
+    return pilha->dados[pilha->topo--];
 }
 
-double peek(Stack* stack) {
-    if (estaVazia(stack)) {
+double topo(Pilha* pilha) {
+    if (estaVazia(pilha)) {
         printf("Erro: Pilha vazia\n");
         exit(1);
     }
-    return stack->data[stack->top];
+    return pilha->dados[pilha->topo];
 }
 
-void imprimePilha(Stack* stack) {
+void imprimePilha(Pilha* pilha) {
     printf("Pilha: [");
-    for (int i = 0; i <= stack->top; i++) {
-        printf("%.2f", stack->data[i]);
-        if (i < stack->top) printf(", ");
+    for (int i = 0; i <= pilha->topo; i++) {
+        printf("%.2f", pilha->dados[i]);
+        if (i < pilha->topo) printf(", ");
     }
     printf("]\n");
 }
 
 // ========== FUNÇÕES DE TOKENIZAÇÃO ==========
 
-int isOperator(char c) {
+int ehOperador(char c) {
     return c == '+' || c == '-' || c == '*' || c == '/' || c == '^';
 }
 
-Token parseToken(char* tokenStr) {
+Token analisarToken(char* tokenStr) {
     Token token;
     
     // Remove espaços em branco
@@ -95,7 +95,7 @@ Token parseToken(char* tokenStr) {
     }
     
     // Verifica se é um operador
-    if (strlen(tokenStr) == 1 && isOperator(tokenStr[0])) {
+    if (strlen(tokenStr) == 1 && ehOperador(tokenStr[0])) {
         token.type = TOKEN_OPERATOR;
         token.value.operator = tokenStr[0];
         return token;
@@ -136,7 +136,7 @@ double aplicaOperacao(double a, double b, char op) {
 }
 
 double avaliaRPN(char* expressao, int verbose) {
-    Stack pilha;
+    Pilha pilha;
     inicializaPilha(&pilha);
     
     char* token = strtok(expressao, " \t\n");
@@ -148,7 +148,7 @@ double avaliaRPN(char* expressao, int verbose) {
     }
     
     while (token != NULL) {
-        Token t = parseToken(token);
+        Token t = analisarToken(token);
         
         if (t.type == TOKEN_NUMBER) {
             push(&pilha, t.value.number);
@@ -158,7 +158,7 @@ double avaliaRPN(char* expressao, int verbose) {
             }
         }
         else if (t.type == TOKEN_OPERATOR) {
-            if (pilha.top < 1) {
+            if (pilha.topo < 1) {
                 printf("Erro: Operandos insuficientes para operador '%c'\n", t.value.operator);
                 exit(1);
             }
@@ -182,7 +182,7 @@ double avaliaRPN(char* expressao, int verbose) {
         token = strtok(NULL, " \t\n");
     }
     
-    if (pilha.top != 0) {
+    if (pilha.topo != 0) {
         printf("Erro: Expressão mal formada (elementos restantes na pilha)\n");
         exit(1);
     }
@@ -191,7 +191,7 @@ double avaliaRPN(char* expressao, int verbose) {
         printf("--------------------------------\n");
     }
     
-    return peek(&pilha);
+    return topo(&pilha);
 }
 
 // ========== FUNÇÕES DE INTERFACE ==========
@@ -226,7 +226,7 @@ void menu() {
 
 int main() {
     char expressao[MAX_INPUT_SIZE];
-    char backup[MAX_INPUT_SIZE];
+    char copia[MAX_INPUT_SIZE];
     int opcao;
     double resultado;
     
@@ -264,14 +264,14 @@ int main() {
                     break;
                 }
                 
-                // Cria backup para modo verbose
-                strcpy(backup, expressao);
+                // Cria cópia para modo verbose
+                strcpy(copia, expressao);
                 
                 printf("\nCalculando...\n");
                 resultado = avaliaRPN(expressao, opcao == 2);
                 
                 printf("\n=== RESULTADO ===\n");
-                printf("Expressão: %s\n", backup);
+                printf("Expressão: %s\n", copia);
                 printf("Resultado: %.6g\n", resultado);
                 break;
                 
