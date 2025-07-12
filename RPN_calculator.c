@@ -4,13 +4,13 @@
 #include <ctype.h>
 #include <math.h>
 
-#define MAX_STACK_SIZE 100
+#define TAMANHO_MAX_PILHA 100
 #define MAX_INPUT_SIZE 1000
 #define MAX_TOKEN_SIZE 50
 
 // Estrutura da pilha
 typedef struct {
-    double dados[MAX_STACK_SIZE];
+    double dados[TAMANHO_MAX_PILHA];
     int topo;
 } Pilha;
 
@@ -40,7 +40,7 @@ int estaVazia(Pilha* pilha) {
 }
 
 int estaCheia(Pilha* pilha) {
-    return pilha->topo >= MAX_STACK_SIZE - 1;
+    return pilha->topo >= TAMANHO_MAX_PILHA - 1;
 }
 
 int push(Pilha* pilha, double valor) {
@@ -54,7 +54,7 @@ int push(Pilha* pilha, double valor) {
 
 double pop(Pilha* pilha) {
     if (estaVazia(pilha)) {
-        printf("Erro: Pilha vazia (underflow)\n");
+        printf("Erro: Pilha vazia (esvaziamento)\n");
         exit(1);
     }
     return pilha->dados[pilha->topo--];
@@ -79,33 +79,33 @@ void imprimePilha(Pilha* pilha) {
 
 // ========== FUNÇÕES DE TOKENIZAÇÃO ==========
 
-int isOperator(char c) {
+int ehOperador(char c) {
     return c == '+' || c == '-' || c == '*' || c == '/' || c == '^';
 }
 
-Token parseToken(char* tokenStr) {
+Token analisaToken(char* textoToken) {
     Token token;
     
     // Remove espaços em branco
-    while (isspace(*tokenStr)) tokenStr++;
+    while (isspace(*textoToken)) textoToken++;
     
-    if (strlen(tokenStr) == 0) {
+    if (strlen(textoToken) == 0) {
         token.tipo = TOKEN_INVALIDO;
         return token;
     }
     
     // Verifica se é um operador
-    if (strlen(tokenStr) == 1 && isOperator(tokenStr[0])) {
+    if (strlen(textoToken) == 1 && ehOperador(textoToken[0])) {
         token.tipo = TOKEN_OPERADOR;
-        token.valor.operador = tokenStr[0];
+        token.valor.operador = textoToken[0];
         return token;
     }
     
     // Tenta converter para número
-    char* endptr;
-    double num = strtod(tokenStr, &endptr);
+    char* fimPtr;
+    double num = strtod(textoToken, &fimPtr);
     
-    if (*endptr == '\0') {
+    if (*fimPtr == '\0') {
         token.tipo = TOKEN_NUMERO;
         token.valor.numero = num;
     } else {
@@ -148,7 +148,7 @@ double avaliaRPN(char* expressao, int verbose) {
     }
     
     while (token != NULL) {
-        Token t = parseToken(token);
+        Token t = analisaToken(token);
         
         if (t.tipo == TOKEN_NUMERO) {
             push(&pilha, t.valor.numero);
