@@ -4,17 +4,17 @@
 #include <ctype.h>
 #include <math.h>
 
-#define MAX_STACK_SIZE 100
-#define MAX_INPUT_SIZE 1000
-#define MAX_TOKEN_SIZE 50
+#define TAMANHO_MAX_PILHA 100
+#define TAMANHO_MAX_ENTRADA 1000
+#define TAMANHO_MAX_TOKEN 50
 
 // Estrutura da pilha
 typedef struct {
-    double dados[MAX_STACK_SIZE];
+    double dados[TAMANHO_MAX_PILHA];
     int topo;
 } Pilha;
 
-// Estrutura para representar um token
+// Estrutura para representar um símbolo
 typedef enum {
     TOKEN_NUMERO,
     TOKEN_OPERADOR,
@@ -22,12 +22,12 @@ typedef enum {
 } TipoToken;
 
 typedef struct {
-    TipoToken type;
+    TipoToken tipo;
     union {
-        double number;
-        char operator;
-    } value;
-} Token;
+        double numero;
+        char operador;
+    } valor;
+} Simbolo;
 
 // ========== IMPLEMENTAÇÃO DO TAD PILHA ==========
 
@@ -40,7 +40,7 @@ int estaVazia(Pilha* pilha) {
 }
 
 int estaCheia(Pilha* pilha) {
-    return pilha->topo >= MAX_STACK_SIZE - 1;
+    return pilha->topo >= TAMANHO_MAX_PILHA - 1;
 }
 
 int push(Pilha* pilha, double valor) {
@@ -77,39 +77,39 @@ void imprimePilha(Pilha* pilha) {
     printf("]\n");
 }
 
-// ========== FUNÇÕES DE TOKENIZAÇÃO ==========
+// ========== FUNÇÕES DE ANÁLISE DE SÍMBOLOS ==========
 
-int isOperator(char c) {
+int ehOperador(char c) {
     return c == '+' || c == '-' || c == '*' || c == '/' || c == '^';
 }
 
-Token parseToken(char* tokenStr) {
-    Token token;
+Simbolo analisaToken(char* textoToken) {
+    Simbolo token;
     
     // Remove espaços em branco
-    while (isspace(*tokenStr)) tokenStr++;
+    while (isspace(*textoToken)) textoToken++;
     
-    if (strlen(tokenStr) == 0) {
-        token.type = TOKEN_INVALIDO;
+    if (strlen(textoToken) == 0) {
+        token.tipo = TOKEN_INVALIDO;
         return token;
     }
     
     // Verifica se é um operador
-    if (strlen(tokenStr) == 1 && isOperator(tokenStr[0])) {
-        token.type = TOKEN_OPERADOR;
-        token.value.operator = tokenStr[0];
+    if (strlen(textoToken) == 1 && ehOperador(textoToken[0])) {
+        token.tipo = TOKEN_OPERADOR;
+        token.valor.operador = textoToken[0];
         return token;
     }
     
     // Tenta converter para número
     char* endptr;
-    double num = strtod(tokenStr, &endptr);
+    double num = strtod(textoToken, &endptr);
     
     if (*endptr == '\0') {
-        token.type = TOKEN_NUMERO;
-        token.value.number = num;
+        token.tipo = TOKEN_NUMERO;
+        token.valor.numero = num;
     } else {
-        token.type = TOKEN_INVALIDO;
+        token.tipo = TOKEN_INVALIDO;
     }
     
     return token;
@@ -148,34 +148,34 @@ double avaliaRPN(char* expressao, int verbose) {
     }
     
     while (token != NULL) {
-        Token t = parseToken(token);
+        Simbolo t = analisaToken(token);
         
-        if (t.type == TOKEN_NUMERO) {
-            push(&pilha, t.value.number);
+        if (t.tipo == TOKEN_NUMERO) {
+            push(&pilha, t.valor.numero);
             if (verbose) {
-                printf("Push %.2f -> ", t.value.number);
+                printf("Push %.2f -> ", t.valor.numero);
                 imprimePilha(&pilha);
             }
         }
-        else if (t.type == TOKEN_OPERADOR) {
+        else if (t.tipo == TOKEN_OPERADOR) {
             if (pilha.topo < 1) {
-                printf("Erro: Operandos insuficientes para operador '%c'\n", t.value.operator);
+                printf("Erro: Operandos insuficientes para operador '%c'\n", t.valor.operador);
                 exit(1);
             }
             
             double b = pop(&pilha);
             double a = pop(&pilha);
-            double resultado = aplicaOperacao(a, b, t.value.operator);
+            double resultado = aplicaOperacao(a, b, t.valor.operador);
             
             push(&pilha, resultado);
             
             if (verbose) {
-                printf("%.2f %c %.2f = %.2f -> ", a, t.value.operator, b, resultado);
+                printf("%.2f %c %.2f = %.2f -> ", a, t.valor.operador, b, resultado);
                 imprimePilha(&pilha);
             }
         }
         else {
-            printf("Erro: Token inválido '%s'\n", token);
+            printf("Erro: Símbolo inválido '%s'\n", token);
             exit(1);
         }
         
@@ -225,8 +225,8 @@ void menu() {
 // ========== FUNÇÃO PRINCIPAL ==========
 
 int main() {
-    char expressao[MAX_INPUT_SIZE];
-    char backup[MAX_INPUT_SIZE];
+    char expressao[TAMANHO_MAX_ENTRADA];
+    char backup[TAMANHO_MAX_ENTRADA];
     int opcao;
     double resultado;
     
