@@ -1,0 +1,19 @@
+# Compiled executables
+rpn_calculator
+*.exe
+*.out
+
+# Object files
+*.o
+*.obj
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Temporary files
+*~
+*.swp
+*.tmp
