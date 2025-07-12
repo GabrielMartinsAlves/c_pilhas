@@ -9,42 +9,18 @@
 #define MAX_INPUT_SIZE 1000
 #define MAX_TOKEN_SIZE 50
 
-// Lookup table for operators - OPTIMIZATION: O(1) operator detection
-static const char operator_lookup[256] = {
-    ['+']=1, ['-']=1, ['*']=1, ['/']=1, ['^']=1
-};
-
 // Estrutura da pilha
 typedef struct {
     double data[MAX_STACK_SIZE];
     int top;
 } Stack;
 
-// Estrutura para representar um token
-typedef enum {
-    TOKEN_NUMBER,
-    TOKEN_OPERATOR,
-    TOKEN_INVALID
-} TokenType;
+// Lookup table for operators - OPTIMIZATION 1
+static const char operator_lookup[256] = {
+    ['+']=1, ['-']=1, ['*']=1, ['/']=1, ['^']=1
+};
 
-typedef struct {
-    TokenType type;
-    union {
-        double number;
-        char operator;
-    } value;
-} Token;
-
-// OPTIMIZATION: Fast token structure for single-pass parsing
-typedef struct {
-    const char* start;
-    int length;
-    int is_number;
-    double number_value;
-    char operator_value;
-} FastToken;
-
-// ========== IMPLEMENTAÇÃO DO TAD PILHA ==========
+// ========== IMPLEMENTAÇÃO DO TAD PILHA (unchanged) ==========
 
 void inicializaPilha(Stack* stack) {
     stack->top = -1;
@@ -92,14 +68,23 @@ void imprimePilha(Stack* stack) {
     printf("]\n");
 }
 
-// ========== FUNÇÕES DE TOKENIZAÇÃO ==========
+// ========== OPTIMIZED PARSING FUNCTIONS ==========
 
-// OPTIMIZATION: Fast operator check using lookup table - O(1) instead of O(k) where k is number of operators
+// OPTIMIZATION 1: Fast operator check using lookup table - O(1)
 static inline int isOperator(char c) {
     return operator_lookup[(unsigned char)c];
 }
 
-// OPTIMIZATION: Single-pass tokenizer that doesn't modify input string
+// OPTIMIZATION 2: Single-pass tokenizer that doesn't modify input string
+typedef struct {
+    const char* start;
+    int length;
+    int is_number;
+    double number_value;
+    char operator_value;
+} FastToken;
+
+// OPTIMIZATION 3: Parse token directly from position without copying strings
 int parseNextToken(const char* expr, int* pos, FastToken* token) {
     // Skip whitespace - OPTIMIZATION: avoid strlen, direct indexing
     while (expr[*pos] && isspace(expr[*pos])) (*pos)++;
@@ -133,39 +118,7 @@ int parseNextToken(const char* expr, int* pos, FastToken* token) {
     return 1;
 }
 
-Token parseToken(char* tokenStr) {
-    Token token;
-    
-    // Remove espaços em branco
-    while (isspace(*tokenStr)) tokenStr++;
-    
-    if (strlen(tokenStr) == 0) {
-        token.type = TOKEN_INVALID;
-        return token;
-    }
-    
-    // Verifica se é um operador
-    if (strlen(tokenStr) == 1 && isOperator(tokenStr[0])) {
-        token.type = TOKEN_OPERATOR;
-        token.value.operator = tokenStr[0];
-        return token;
-    }
-    
-    // Tenta converter para número
-    char* endptr;
-    double num = strtod(tokenStr, &endptr);
-    
-    if (*endptr == '\0') {
-        token.type = TOKEN_NUMBER;
-        token.value.number = num;
-    } else {
-        token.type = TOKEN_INVALID;
-    }
-    
-    return token;
-}
-
-// ========== FUNÇÕES DE AVALIAÇÃO ==========
+// ========== FUNÇÕES DE AVALIAÇÃO (optimized) ==========
 
 double aplicaOperacao(double a, double b, char op) {
     switch (op) {
@@ -185,7 +138,7 @@ double aplicaOperacao(double a, double b, char op) {
     }
 }
 
-// OPTIMIZATION: Single-pass evaluation without string modification - reduces from O(n*m) to O(n)
+// OPTIMIZATION 4: Single-pass evaluation without string modification
 double avaliaRPN_optimized(const char* expressao, int verbose) {
     Stack pilha;
     inicializaPilha(&pilha);
@@ -194,9 +147,9 @@ double avaliaRPN_optimized(const char* expressao, int verbose) {
     FastToken token;
     
     if (verbose) {
-        printf("\n=== AVALIAÇÃO PASSO A PASSO (OTIMIZADA) ===\n");
+        printf("\n=== AVALIAÇÃO PASSO A PASSO ===\n");
         printf("Expressão: %s\n", expressao);
-        printf("-------------------------------------------\n");
+        printf("--------------------------------\n");
     }
     
     while (1) {
@@ -240,13 +193,14 @@ double avaliaRPN_optimized(const char* expressao, int verbose) {
     }
     
     if (verbose) {
-        printf("-------------------------------------------\n");
+        printf("--------------------------------\n");
     }
     
     return peek(&pilha);
 }
 
-double avaliaRPN(char* expressao, int verbose) {
+// Keep original function for comparison
+double avaliaRPN_original(char* expressao, int verbose) {
     Stack pilha;
     inicializaPilha(&pilha);
     
@@ -259,35 +213,47 @@ double avaliaRPN(char* expressao, int verbose) {
     }
     
     while (token != NULL) {
-        Token t = parseToken(token);
+        // Remove espaços em branco
+        while (isspace(*token)) token++;
         
-        if (t.type == TOKEN_NUMBER) {
-            push(&pilha, t.value.number);
-            if (verbose) {
-                printf("Push %.2f -> ", t.value.number);
-                imprimePilha(&pilha);
-            }
+        if (strlen(token) == 0) {
+            token = strtok(NULL, " \t\n");
+            continue;
         }
-        else if (t.type == TOKEN_OPERATOR) {
+        
+        // Verifica se é um operador
+        if (strlen(token) == 1 && isOperator(token[0])) {
             if (pilha.top < 1) {
-                printf("Erro: Operandos insuficientes para operador '%c'\n", t.value.operator);
+                printf("Erro: Operandos insuficientes para operador '%c'\n", token[0]);
                 exit(1);
             }
             
             double b = pop(&pilha);
             double a = pop(&pilha);
-            double resultado = aplicaOperacao(a, b, t.value.operator);
+            double resultado = aplicaOperacao(a, b, token[0]);
             
             push(&pilha, resultado);
             
             if (verbose) {
-                printf("%.2f %c %.2f = %.2f -> ", a, t.value.operator, b, resultado);
+                printf("%.2f %c %.2f = %.2f -> ", a, token[0], b, resultado);
                 imprimePilha(&pilha);
             }
         }
         else {
-            printf("Erro: Token inválido '%s'\n", token);
-            exit(1);
+            // Tenta converter para número
+            char* endptr;
+            double num = strtod(token, &endptr);
+            
+            if (*endptr == '\0') {
+                push(&pilha, num);
+                if (verbose) {
+                    printf("Push %.2f -> ", num);
+                    imprimePilha(&pilha);
+                }
+            } else {
+                printf("Erro: Token inválido '%s'\n", token);
+                exit(1);
+            }
         }
         
         token = strtok(NULL, " \t\n");
@@ -305,7 +271,7 @@ double avaliaRPN(char* expressao, int verbose) {
     return peek(&pilha);
 }
 
-// ========== FUNÇÕES DE INTERFACE ==========
+// ========== FUNÇÕES DE INTERFACE (unchanged) ==========
 
 void exemploUso() {
     printf("\n=== EXEMPLOS DE USO ===\n");
@@ -324,19 +290,18 @@ void exemploUso() {
 }
 
 void menu() {
-    printf("\n========== CALCULADORA RPN (OTIMIZADA) ==========\n");
-    printf("1. Calcular expressão RPN\n");
-    printf("2. Calcular com modo verbose\n");
+    printf("\n========== CALCULADORA RPN OTIMIZADA ==========\n");
+    printf("1. Calcular expressão RPN (versão otimizada)\n");
+    printf("2. Calcular com modo verbose (versão otimizada)\n");
     printf("3. Exemplos de uso\n");
     printf("4. Teste de performance\n");
-    printf("5. Comparar versões (original vs otimizada)\n");
-    printf("6. Sair\n");
-    printf("================================================\n");
+    printf("5. Sair\n");
+    printf("===============================================\n");
     printf("Escolha uma opção: ");
 }
 
-// Performance testing functions
-void test_performance_simple() {
+// Performance test function
+void test_performance() {
     char* test_expressions[] = {
         "3 4 +",                                    // Simple
         "5 1 2 + 4 * + 3 -",                      // Medium
@@ -346,44 +311,11 @@ void test_performance_simple() {
     };
     
     int num_tests = sizeof(test_expressions) / sizeof(test_expressions[0]);
-    int iterations_per_test = 50000;
+    int iterations_per_test = 100000;
     
-    printf("\n=== TESTE DE PERFORMANCE OTIMIZADA ===\n");
-    printf("Testando %d expressões com %d iterações cada\n\n", num_tests, iterations_per_test);
-    
-    for (int i = 0; i < num_tests; i++) {
-        printf("Expressão %d: %s\n", i+1, test_expressions[i]);
-        
-        clock_t start = clock();
-        for (int j = 0; j < iterations_per_test; j++) {
-            avaliaRPN_optimized(test_expressions[i], 0);
-        }
-        clock_t end = clock();
-        double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-        
-        printf("Tempo: %.6f segundos (%.2f μs por avaliação)\n", 
-               time_taken, (time_taken * 1000000) / iterations_per_test);
-        printf("Throughput: %.0f avaliações/segundo\n\n", iterations_per_test / time_taken);
-    }
-}
-
-void compare_performance() {
-    char* test_expressions[] = {
-        "3 4 +",                                    // Simple
-        "5 1 2 + 4 * + 3 -",                      // Medium
-        "15 7 1 1 + - / 3 * 2 1 1 + + -",        // Complex
-        "1 2 + 3 4 + * 5 6 + 7 8 + * +",         // Very complex
-        "10 5 + 2 * 3 / 4 + 5 - 6 * 7 / 8 + 9 - 1 +", // Long expression
-    };
-    
-    int num_tests = sizeof(test_expressions) / sizeof(test_expressions[0]);
-    int iterations_per_test = 50000;
-    
-    printf("\n=== COMPARAÇÃO DE PERFORMANCE ===\n");
+    printf("\n=== TESTE DE PERFORMANCE ===\n");
     printf("Comparando versão original vs otimizada\n");
     printf("Testando %d expressões com %d iterações cada\n\n", num_tests, iterations_per_test);
-    
-    double total_speedup = 0.0;
     
     for (int i = 0; i < num_tests; i++) {
         printf("Expressão %d: %s\n", i+1, test_expressions[i]);
@@ -393,7 +325,7 @@ void compare_performance() {
         for (int j = 0; j < iterations_per_test; j++) {
             char expr_copy[1000];
             strcpy(expr_copy, test_expressions[i]);
-            avaliaRPN(expr_copy, 0);
+            avaliaRPN_original(expr_copy, 0);
         }
         clock_t end = clock();
         double time_original = ((double)(end - start)) / CLOCKS_PER_SEC;
@@ -407,7 +339,6 @@ void compare_performance() {
         double time_optimized = ((double)(end - start)) / CLOCKS_PER_SEC;
         
         double speedup = time_original / time_optimized;
-        total_speedup += speedup;
         
         printf("Original:   %.6f segundos (%.2f μs por avaliação)\n", 
                time_original, (time_original * 1000000) / iterations_per_test);
@@ -415,21 +346,16 @@ void compare_performance() {
                time_optimized, (time_optimized * 1000000) / iterations_per_test);
         printf("Speedup:    %.2fx mais rápida\n\n", speedup);
     }
-    
-    printf("=== RESUMO ===\n");
-    printf("Speedup médio: %.2fx\n", total_speedup / num_tests);
-    printf("Melhoria média: %.1f%% mais rápida\n", ((total_speedup / num_tests) - 1.0) * 100);
 }
 
 // ========== FUNÇÃO PRINCIPAL ==========
 
 int main() {
     char expressao[MAX_INPUT_SIZE];
-    char backup[MAX_INPUT_SIZE];
     int opcao;
     double resultado;
     
-    printf("=== CALCULADORA DE NOTAÇÃO POLONESA REVERSA (OTIMIZADA) ===\n");
+    printf("=== CALCULADORA RPN OTIMIZADA ===\n");
     printf("Versão com algoritmo otimizado para melhor performance\n");
     
     while (1) {
@@ -463,14 +389,11 @@ int main() {
                     break;
                 }
                 
-                // Cria backup para modo verbose
-                strcpy(backup, expressao);
-                
                 printf("\nCalculando...\n");
                 resultado = avaliaRPN_optimized(expressao, opcao == 2);
                 
                 printf("\n=== RESULTADO ===\n");
-                printf("Expressão: %s\n", backup);
+                printf("Expressão: %s\n", expressao);
                 printf("Resultado: %.6g\n", resultado);
                 break;
                 
@@ -479,14 +402,10 @@ int main() {
                 break;
                 
             case 4:
-                test_performance_simple();
+                test_performance();
                 break;
                 
             case 5:
-                compare_performance();
-                break;
-                
-            case 6:
                 printf("Encerrando calculadora RPN otimizada...\n");
                 return 0;
                 
@@ -499,4 +418,4 @@ int main() {
     }
     
     return 0;
-}// Nova linha adicionada via API
+}
