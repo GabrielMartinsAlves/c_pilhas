@@ -292,4 +292,4 @@ int main() {
     }
     
     return 0;
-}// Nova linha adicionada via API
+}

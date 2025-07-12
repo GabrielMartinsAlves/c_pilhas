@@ -1,0 +1,14 @@
+# Compiled binaries
+rpn_calculator
+*.exe
+
+# Object files
+*.o
+*.obj
+
+# Debug files
+*.pdb
+
+# Temporary files
+*.tmp
+*~
