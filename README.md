@@ -1,14 +1,14 @@
-# Calculadora de Notação Polonesa Reversa (RPN)
+# Reverse Polish Notation (RPN) Calculator
 
-## Sumário Executivo
+## Executive Summary
 
-Este projeto implementa uma calculadora completa para avaliação de expressões matemáticas em **Notação Polonesa Reversa** (RPN), desenvolvida em linguagem C. A implementação utiliza uma estrutura de dados **pilha** (stack) como núcleo do algoritmo de avaliação, seguindo rigorosamente os princípios de **Tipos Abstratos de Dados** (TAD) e oferecendo funcionalidades avançadas como modo verbose para análise passo-a-passo e tratamento robusto de erros.
+This project implements a complete calculator for evaluating mathematical expressions in **Reverse Polish Notation** (RPN), developed in C language. The implementation uses a **stack** data structure as the core of the evaluation algorithm, strictly following **Abstract Data Type** (ADT) principles and offering advanced functionalities such as verbose mode for step-by-step analysis and robust error handling.
 
-## Arquitetura e Design Técnico
+## Architecture and Technical Design
 
-### Estruturas de Dados Fundamentais
+### Fundamental Data Structures
 
-#### 1. TAD Pilha (Stack)
+#### 1. Stack ADT
 ```c
 typedef struct {
     double data[MAX_STACK_SIZE];
@@ -16,12 +16,12 @@ typedef struct {
 } Stack;
 ```
 
-A pilha constitui o elemento central da arquitetura, implementada através de um **array estático** com **indexação por topo**. Esta abordagem garante:
-- **Complexidade temporal O(1)** para todas as operações fundamentais
-- **Localidade de referência** otimizada para cache do processador
-- **Controle determinístico de memória** sem fragmentação dinâmica
+The stack constitutes the central element of the architecture, implemented through a **static array** with **top indexing**. This approach ensures:
+- **O(1) time complexity** for all fundamental operations
+- **Optimized reference locality** for processor cache
+- **Deterministic memory control** without dynamic fragmentation
 
-#### 2. Sistema de Tokenização
+#### 2. Tokenization System
 ```c
 typedef enum {
     TOKEN_NUMBER,
@@ -38,152 +38,152 @@ typedef struct {
 } Token;
 ```
 
-O sistema de tokenização implementa um **parser léxico** que categoriza elementos da expressão, utilizando **união discriminada** para otimização de memória e **type safety** em tempo de compilação.
+The tokenization system implements a **lexical parser** that categorizes expression elements, using **discriminated union** for memory optimization and **type safety** at compile time.
 
-### Algoritmo de Avaliação RPN
+### RPN Evaluation Algorithm
 
-#### Fundamentação Teórica
-A Notação Polonesa Reversa elimina a **ambiguidade de precedência** presente na notação infixa através da **postfixação de operadores**. O algoritmo de avaliação baseia-se no princípio **LIFO** (Last In, First Out) da pilha:
+#### Theoretical Foundation
+Reverse Polish Notation eliminates **precedence ambiguity** present in infix notation through **operator postfixing**. The evaluation algorithm is based on the **LIFO** (Last In, First Out) principle of the stack:
 
-1. **Fase de Scanning**: Tokenização sequencial da expressão
-2. **Fase de Classificação**: Identificação de operandos vs. operadores
-3. **Fase de Avaliação**: Aplicação da máquina de estados da pilha
+1. **Scanning Phase**: Sequential tokenization of the expression
+2. **Classification Phase**: Identification of operands vs. operators
+3. **Evaluation Phase**: Application of the stack state machine
 
-#### Complexidade Computacional
-- **Temporal**: O(n), onde n é o número de tokens
-- **Espacial**: O(h), onde h é a altura máxima da pilha de operandos
+#### Computational Complexity
+- **Time**: O(n), where n is the number of tokens
+- **Space**: O(h), where h is the maximum height of the operand stack
 
-#### Pseudocódigo do Algoritmo Principal
+#### Main Algorithm Pseudocode
 ```
-ALGORITMO AvaliaRPN(expressao):
-    pilha ← nova_pilha_vazia()
-    tokens ← tokenizar(expressao)
+ALGORITHM EvaluateRPN(expression):
+    stack ← new_empty_stack()
+    tokens ← tokenize(expression)
     
-    PARA CADA token EM tokens:
-        SE token é NÚMERO:
-            pilha.push(token.valor)
-        SENÃO SE token é OPERADOR:
-            b ← pilha.pop()
-            a ← pilha.pop()
-            resultado ← aplicar_operacao(a, operador, b)
-            pilha.push(resultado)
-        SENÃO:
-            ERRO("Token inválido")
+    FOR EACH token IN tokens:
+        IF token is NUMBER:
+            stack.push(token.value)
+        ELSE IF token is OPERATOR:
+            b ← stack.pop()
+            a ← stack.pop()
+            result ← apply_operation(a, operator, b)
+            stack.push(result)
+        ELSE:
+            ERROR("Invalid token")
     
-    SE pilha.tamanho() ≠ 1:
-        ERRO("Expressão mal formada")
+    IF stack.size() ≠ 1:
+        ERROR("Malformed expression")
     
-    RETORNA pilha.top()
+    RETURN stack.top()
 ```
 
-## Implementação Detalhada
+## Detailed Implementation
 
-### Módulo de Pilha (Stack Operations)
+### Stack Module (Stack Operations)
 
-#### Operações Fundamentais
+#### Fundamental Operations
 
-**inicializaPilha(Stack* stack)**
-- **Propósito**: Inicialização do estado da pilha
-- **Complexidade**: O(1)
-- **Invariante**: `stack->top = -1` (pilha vazia)
+**initializeStack(Stack* stack)**
+- **Purpose**: Stack state initialization
+- **Complexity**: O(1)
+- **Invariant**: `stack->top = -1` (empty stack)
 
-**push(Stack* stack, double valor)**
-- **Propósito**: Inserção de elemento no topo
-- **Precondição**: `!estaCheia(stack)`
-- **Pós-condição**: `stack->top++` e `stack->data[top] = valor`
-- **Tratamento de overflow**: Retorno de código de erro
+**push(Stack* stack, double value)**
+- **Purpose**: Element insertion at the top
+- **Precondition**: `!isFull(stack)`
+- **Postcondition**: `stack->top++` and `stack->data[top] = value`
+- **Overflow handling**: Error code return
 
 **pop(Stack* stack)**
-- **Propósito**: Remoção e retorno do elemento do topo
-- **Precondição**: `!estaVazia(stack)`
-- **Pós-condição**: `stack->top--`
-- **Tratamento de underflow**: Terminação controlada com mensagem de erro
+- **Purpose**: Removal and return of the top element
+- **Precondition**: `!isEmpty(stack)`
+- **Postcondition**: `stack->top--`
+- **Underflow handling**: Controlled termination with error message
 
-### Módulo de Tokenização (Lexical Analysis)
+### Tokenization Module (Lexical Analysis)
 
-#### Parser de Tokens
-A função `parseToken()` implementa um **analisador léxico robusto** que:
+#### Token Parser
+The `parseToken()` function implements a **robust lexical analyzer** that:
 
-1. **Normalização**: Remove whitespace através de `isspace()`
-2. **Classificação de Operadores**: Validação de caracteres únicos através de `isOperator()`
-3. **Parsing Numérico**: Utiliza `strtod()` com validação completa de conversão
-4. **Detecção de Erros**: Identificação de tokens inválidos com classificação `TOKEN_INVALID`
+1. **Normalization**: Removes whitespace through `isspace()`
+2. **Operator Classification**: Single character validation through `isOperator()`
+3. **Numeric Parsing**: Uses `strtod()` with complete conversion validation
+4. **Error Detection**: Invalid token identification with `TOKEN_INVALID` classification
 
-#### Suporte a Operadores
-- **Aritméticos básicos**: `+`, `-`, `*`, `/`
-- **Exponenciação**: `^` (utilizando `pow()` da math.h)
-- **Extensibilidade**: Arquitetura permite adição trivial de novos operadores
+#### Operator Support
+- **Basic arithmetic**: `+`, `-`, `*`, `/`
+- **Exponentiation**: `^` (using `pow()` from math.h)
+- **Extensibility**: Architecture allows trivial addition of new operators
 
-### Módulo de Avaliação (Expression Evaluation)
+### Evaluation Module (Expression Evaluation)
 
-#### Função aplicaOperacao()
-Implementa um **dispatcher de operações** através de `switch-case`, garantindo:
-- **Type safety** através de validação de operadores
-- **Tratamento de divisão por zero** com detecção em tempo de execução
-- **Precisão numérica** através de aritmética de ponto flutuante double-precision
+#### applyOperation() Function
+Implements an **operation dispatcher** through `switch-case`, ensuring:
+- **Type safety** through operator validation
+- **Division by zero handling** with runtime detection
+- **Numeric precision** through double-precision floating point arithmetic
 
-#### Tratamento de Erros
-O sistema implementa **múltiplas camadas de validação**:
+#### Error Handling
+The system implements **multiple validation layers**:
 
-1. **Validação sintática**: Tokens mal formados
-2. **Validação semântica**: Operandos insuficientes
-3. **Validação de resultado**: Divisão por zero, overflow matemático
-4. **Validação estrutural**: Expressões incompletas (pilha com múltiplos elementos)
+1. **Syntactic validation**: Malformed tokens
+2. **Semantic validation**: Insufficient operands
+3. **Result validation**: Division by zero, mathematical overflow
+4. **Structural validation**: Incomplete expressions (stack with multiple elements)
 
-### Interface de Usuário
+### User Interface
 
-#### Sistema de Menu Interativo
-- **Modo normal**: Avaliação silenciosa com resultado final
-- **Modo verbose**: Trace completo da execução com estado da pilha
-- **Sistema de exemplos**: Demonstrações pedagógicas
-- **Tratamento de entrada**: Validação robusta com limpeza de buffer
+#### Interactive Menu System
+- **Normal mode**: Silent evaluation with final result
+- **Verbose mode**: Complete execution trace with stack state
+- **Example system**: Pedagogical demonstrations
+- **Input handling**: Robust validation with buffer cleaning
 
-#### Funcionalidade Verbose
-O modo verbose implementa um **debugger integrado** que exibe:
-- Estado da pilha após cada operação
-- Operações intermediárias com operandos explícitos
-- Fluxo de execução passo-a-passo
+#### Verbose Functionality
+Verbose mode implements an **integrated debugger** that displays:
+- Stack state after each operation
+- Intermediate operations with explicit operands
+- Step-by-step execution flow
 
-## Compilação e Execução
+## Compilation and Execution
 
-### Requisitos do Sistema
-- **Compilador**: GCC 4.8+ ou Clang 3.4+
-- **Padrão C**: C99 ou superior
-- **Bibliotecas**: math.h (linking com -lm)
-- **Sistema operacional**: Unix-like, Windows (MinGW), macOS
+### System Requirements
+- **Compiler**: GCC 4.8+ or Clang 3.4+
+- **C Standard**: C99 or higher
+- **Libraries**: math.h (linking with -lm)
+- **Operating System**: Unix-like, Windows (MinGW), macOS
 
-### Processo de Build
+### Build Process
 ```bash
-# Compilação básica
-gcc -o rpn_calculator rpn_calculator.c -lm
+# Basic compilation
+gcc -o rpn_calculator RPN_calculator.c -lm
 
-# Compilação com otimizações
-gcc -O3 -Wall -Wextra -o rpn_calculator rpn_calculator.c -lm
+# Compilation with optimizations
+gcc -O3 -Wall -Wextra -o rpn_calculator RPN_calculator.c -lm
 
-# Compilação para debug
-gcc -g -DDEBUG -Wall -Wextra -o rpn_calculator rpn_calculator.c -lm
+# Debug compilation
+gcc -g -DDEBUG -Wall -Wextra -o rpn_calculator RPN_calculator.c -lm
 ```
 
-### Execução
+### Execution
 ```bash
 ./rpn_calculator
 ```
 
-## Casos de Teste e Validação
+## Test Cases and Validation
 
-### Bateria de Testes Fundamental
+### Fundamental Test Suite
 
-#### Teste 1: Operações Aritméticas Básicas
+#### Test 1: Basic Arithmetic Operations
 ```
-Entrada: "3 4 +"
-Saída esperada: 7.000000
-Justificativa: Soma simples de dois operandos
+Input: "3 4 +"
+Expected output: 7.000000
+Justification: Simple addition of two operands
 ```
 
-#### Teste 2: Expressão Complexa
+#### Test 2: Complex Expression
 ```
-Entrada: "5 1 2 + 4 * + 3 -"
-Trace esperado:
+Input: "5 1 2 + 4 * + 3 -"
+Expected trace:
   Push 5.00 -> [5.00]
   Push 1.00 -> [5.00, 1.00]
   Push 2.00 -> [5.00, 1.00, 2.00]
@@ -193,129 +193,129 @@ Trace esperado:
   5.00 + 12.00 = 17.00 -> [17.00]
   Push 3.00 -> [17.00, 3.00]
   17.00 - 3.00 = 14.00 -> [14.00]
-Saída: 14.000000
+Output: 14.000000
 ```
 
-#### Teste 3: Exponenciação
+#### Test 3: Exponentiation
 ```
-Entrada: "2 3 ^"
-Saída esperada: 8.000000
-Validação: pow(2, 3) = 8
-```
-
-#### Teste 4: Números Decimais
-```
-Entrada: "3.14159 2 *"
-Saída esperada: 6.283180
-Precisão: Double-precision floating point
+Input: "2 3 ^"
+Expected output: 8.000000
+Validation: pow(2, 3) = 8
 ```
 
-### Casos de Erro
-
-#### Erro 1: Divisão por Zero
+#### Test 4: Decimal Numbers
 ```
-Entrada: "5 0 /"
-Saída: "Erro: Divisão por zero"
-Comportamento: Terminação controlada
+Input: "3.14159 2 *"
+Expected output: 6.283180
+Precision: Double-precision floating point
 ```
 
-#### Erro 2: Operandos Insuficientes
-```
-Entrada: "3 +"
-Saída: "Erro: Operandos insuficientes para operador '+'"
-```
+### Error Cases
 
-#### Erro 3: Expressão Mal Formada
+#### Error 1: Division by Zero
 ```
-Entrada: "3 4 5 +"
-Saída: "Erro: Expressão mal formada (elementos restantes na pilha)"
+Input: "5 0 /"
+Output: "Error: Division by zero"
+Behavior: Controlled termination
 ```
 
-## Análise de Desempenho
+#### Error 2: Insufficient Operands
+```
+Input: "3 +"
+Output: "Error: Insufficient operands for operator '+'"
+```
 
-### Benchmarking Teórico
+#### Error 3: Malformed Expression
+```
+Input: "3 4 5 +"
+Output: "Error: Malformed expression (remaining elements in stack)"
+```
 
-#### Complexidade Temporal
-- **Tokenização**: O(n⋅m), onde n = número de tokens, m = tamanho médio do token
-- **Avaliação**: O(n), onde n = número de tokens
-- **Complexidade total**: O(n⋅m)
+## Performance Analysis
 
-#### Complexidade Espacial
-- **Pilha de operandos**: O(h), onde h = altura máxima da árvore de expressão
-- **Buffer de entrada**: O(l), onde l = comprimento da expressão
-- **Complexidade total**: O(h + l)
+### Theoretical Benchmarking
+
+#### Time Complexity
+- **Tokenization**: O(n⋅m), where n = number of tokens, m = average token size
+- **Evaluation**: O(n), where n = number of tokens
+- **Total complexity**: O(n⋅m)
+
+#### Space Complexity
+- **Operand stack**: O(h), where h = maximum height of expression tree
+- **Input buffer**: O(l), where l = expression length
+- **Total complexity**: O(h + l)
 
 #### Memory Footprint
 - Stack structure: `8 * MAX_STACK_SIZE + 4` bytes
 - Input buffer: `MAX_INPUT_SIZE` bytes
-- Token processing: `sizeof(Token)` bytes temporários
+- Token processing: `sizeof(Token)` temporary bytes
 
-### Otimizações Implementadas
+### Implemented Optimizations
 
-1. **Static Arrays**: Eliminação de alocação dinâmica
-2. **Union Types**: Otimização de memória para tokens
-3. **Single-pass Parsing**: Processamento linear sem backtracking
-4. **Inline Operations**: Operações matemáticas diretas sem chamadas de função desnecessárias
+1. **Static Arrays**: Elimination of dynamic allocation
+2. **Union Types**: Memory optimization for tokens
+3. **Single-pass Parsing**: Linear processing without backtracking
+4. **Inline Operations**: Direct mathematical operations without unnecessary function calls
 
-## Extensibilidade e Manutenibilidade
+## Extensibility and Maintainability
 
-#### Adição de Novos Operadores
+#### Adding New Operators
 ```c
-// Em isOperator()
+// In isOperator()
 return c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%';
 
-// Em aplicaOperacao()
+// In applyOperation()
 case '%': 
     if (b == 0) {
-        printf("Erro: Módulo por zero\n");
+        printf("Error: Modulo by zero\n");
         exit(1);
     }
     return fmod(a, b);
 ```
 
-#### Suporte a Funções Matemáticas
-Possível extensão para funções como `sin`, `cos`, `log`, `sqrt` através de:
-1. Expansão do enum `TokenType` para `TOKEN_FUNCTION`
-2. Modificação do parser para identificar strings de função  
-3. Implementação de dispatcher para funções matemáticas
+#### Mathematical Functions Support
+Possible extension for functions like `sin`, `cos`, `log`, `sqrt` through:
+1. Expansion of `TokenType` enum to `TOKEN_FUNCTION`
+2. Parser modification to identify function strings  
+3. Implementation of mathematical function dispatcher
 
-#### Melhorias de Interface
-- **Histórico de cálculos**: Implementação de lista ligada de expressões
-- **Modo batch**: Processamento de arquivo com múltiplas expressões
-- **Export de resultados**: Saída formatada em JSON/XML/CSV
+#### Interface Improvements
+- **Calculation history**: Linked list implementation of expressions
+- **Batch mode**: File processing with multiple expressions
+- **Result export**: Formatted output in JSON/XML/CSV
 
-### Padrões de Design Aplicados
+### Applied Design Patterns
 
-1. **Abstract Data Type (ADT)**: Encapsulamento da pilha
-2. **Strategy Pattern**: Dispatcher de operações
-3. **State Machine**: Parser de tokens com estados
-4. **Error Handling**: Propagação estruturada de erros
+1. **Abstract Data Type (ADT)**: Stack encapsulation
+2. **Strategy Pattern**: Operation dispatcher
+3. **State Machine**: Token parser with states
+4. **Error Handling**: Structured error propagation
 
-## Considerações de Segurança
+## Security Considerations
 
-### Validação de Entrada
-- **Buffer overflow protection**: Uso de `fgets()` com limite
-- **Format string attacks**: Ausência de `printf()` com string não-literal
-- **Integer overflow**: Uso de double-precision para operações
+### Input Validation
+- **Buffer overflow protection**: Use of `fgets()` with limit
+- **Format string attacks**: Absence of `printf()` with non-literal string
+- **Integer overflow**: Use of double-precision for operations
 
-### Robustez
-- **Graceful degradation**: Terminação controlada em erros
-- **Input sanitization**: Validação de todos os tokens
-- **Resource management**: Ausência de memory leaks (stack allocation)
+### Robustness
+- **Graceful degradation**: Controlled termination on errors
+- **Input sanitization**: Validation of all tokens
+- **Resource management**: Absence of memory leaks (stack allocation)
 
-## Conclusão Técnica
+## Technical Conclusion
 
-Esta implementação representa uma solução **production-ready** para avaliação de expressões RPN, incorporando:
+This implementation represents a **production-ready** solution for RPN expression evaluation, incorporating:
 
-- **Algoritmos eficientes** com complexidade ótima
-- **Arquitetura modular** facilitando manutenção
-- **Tratamento robusto de erros** para ambientes críticos  
-- **Interface rica** com funcionalidades de debugging
-- **Código limpo** seguindo padrões de engenharia de software
+- **Efficient algorithms** with optimal complexity
+- **Modular architecture** facilitating maintenance
+- **Robust error handling** for critical environments  
+- **Rich interface** with debugging functionalities
+- **Clean code** following software engineering standards
 
-A solução atende completamente aos requisitos especificados, superando-os através de funcionalidades avançadas como modo verbose, suporte a exponenciação, e interface interativa, mantendo performance otimizada e código de alta qualidade.
+The solution completely meets the specified requirements, exceeding them through advanced functionalities such as verbose mode, exponentiation support, and interactive interface, while maintaining optimized performance and high-quality code.
 
-### Métricas de Qualidade
-- **Linhas de código**: ~300 LOC
-- **Complexidade ciclomática**: Baixa (< 10 por função)
-- **Portabilidade**: Compatível com padrões ANSI C99+
+### Quality Metrics
+- **Lines of code**: ~300 LOC
+- **Cyclomatic complexity**: Low (< 10 per function)
+- **Portability**: Compatible with ANSI C99+ standards
