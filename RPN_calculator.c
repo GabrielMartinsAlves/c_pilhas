@@ -24,9 +24,9 @@ typedef enum {
 typedef struct {
     TipoToken type;
     union {
-        double number;
-        char operator;
-    } value;
+        double numero;
+        char operador;
+    } valor;
 } Token;
 
 // ========== IMPLEMENTAÇÃO DO TAD PILHA ==========
@@ -97,7 +97,7 @@ Token analisarToken(char* tokenStr) {
     // Verifica se é um operador
     if (strlen(tokenStr) == 1 && ehOperador(tokenStr[0])) {
         token.type = TOKEN_OPERATOR;
-        token.value.operator = tokenStr[0];
+        token.valor.operador = tokenStr[0];
         return token;
     }
     
@@ -107,7 +107,7 @@ Token analisarToken(char* tokenStr) {
     
     if (*endptr == '\0') {
         token.type = TOKEN_NUMBER;
-        token.value.number = num;
+        token.valor.numero = num;
     } else {
         token.type = TOKEN_INVALID;
     }
@@ -151,26 +151,26 @@ double avaliaRPN(char* expressao, int verbose) {
         Token t = analisarToken(token);
         
         if (t.type == TOKEN_NUMBER) {
-            push(&pilha, t.value.number);
+            push(&pilha, t.valor.numero);
             if (verbose) {
-                printf("Push %.2f -> ", t.value.number);
+                printf("Push %.2f -> ", t.valor.numero);
                 imprimePilha(&pilha);
             }
         }
         else if (t.type == TOKEN_OPERATOR) {
             if (pilha.topo < 1) {
-                printf("Erro: Operandos insuficientes para operador '%c'\n", t.value.operator);
+                printf("Erro: Operandos insuficientes para operador '%c'\n", t.valor.operador);
                 exit(1);
             }
             
             double b = pop(&pilha);
             double a = pop(&pilha);
-            double resultado = aplicaOperacao(a, b, t.value.operator);
+            double resultado = aplicaOperacao(a, b, t.valor.operador);
             
             push(&pilha, resultado);
             
             if (verbose) {
-                printf("%.2f %c %.2f = %.2f -> ", a, t.value.operator, b, resultado);
+                printf("%.2f %c %.2f = %.2f -> ", a, t.valor.operador, b, resultado);
                 imprimePilha(&pilha);
             }
         }
