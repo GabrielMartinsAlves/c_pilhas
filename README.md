@@ -1,8 +1,29 @@
 # Calculadora de Notação Polonesa Reversa (RPN)
 
+## 🌟 Novidade: Interface Web com Auth0!
+
+🔐 **Agora disponível: Sistema de login seguro com Auth0!**
+
+Este projeto oferece **duas interfaces**:
+1. **🖥️ Aplicação Console C** - Versão original em linha de comando
+2. **🌐 Interface Web** - Nova versão com autenticação Auth0 e interface moderna
+
+### 🚀 Acesso Rápido - Interface Web
+```bash
+./setup.sh    # Configuração automática
+npm start     # Iniciar servidor web
+```
+Acesse: `http://localhost:3000` ➔ Faça login ➔ Use a calculadora!
+
+**📖 Documentação completa da web**: [README_WEB.md](README_WEB.md)
+
+---
+
 ## Sumário Executivo
 
 Este projeto implementa uma calculadora completa para avaliação de expressões matemáticas em **Notação Polonesa Reversa** (RPN), desenvolvida em linguagem C. A implementação utiliza uma estrutura de dados **pilha** (stack) como núcleo do algoritmo de avaliação, seguindo rigorosamente os princípios de **Tipos Abstratos de Dados** (TAD) e oferecendo funcionalidades avançadas como modo verbose para análise passo-a-passo e tratamento robusto de erros.
+
+**✨ Agora com interface web moderna e autenticação segura via Auth0!**
 
 ## Arquitetura e Design Técnico
 
