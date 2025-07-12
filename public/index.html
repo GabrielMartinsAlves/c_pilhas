@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPN Calculator - JWT Authentication</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .auth-section, .calculator-section {
+            margin-bottom: 40px;
+        }
+
+        .auth-section {
+            display: block;
+        }
+
+        .calculator-section {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, textarea, button {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            margin-left: 10px;
+        }
+
+        .toggle-auth {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .toggle-auth a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .toggle-auth a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .user-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .steps {
+            margin-top: 15px;
+        }
+
+        .step {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .examples {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .examples h4 {
+            margin-bottom: 10px;
+            color: #0066cc;
+        }
+
+        .examples code {
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧮 RPN Calculator</h1>
+            <p>Reverse Polish Notation Calculator with JWT Authentication</p>
+        </div>
+
+        <div class="content">
+            <!-- Authentication Section -->
+            <div id="authSection" class="auth-section">
+                <div id="alertContainer"></div>
+                
+                <!-- Login Form -->
+                <div id="loginForm">
+                    <h2>Login</h2>
+                    <form id="loginFormElement">
+                        <div class="form-group">
+                            <label for="loginUsername">Username or Email:</label>
+                            <input type="text" id="loginUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password:</label>
+                            <input type="password" id="loginPassword" required>
+                        </div>
+                        <button type="submit" id="loginBtn">Login</button>
+                    </form>
+                    <div class="toggle-auth">
+                        <p>Don't have an account? <a href="#" id="showRegister">Register here</a></p>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="registerForm" style="display: none;">
+                    <h2>Register</h2>
+                    <form id="registerFormElement">
+                        <div class="form-group">
+                            <label for="registerUsername">Username:</label>
+                            <input type="text" id="registerUsername" required>
+                            <small>3-20 characters, letters, numbers, and underscores only</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerEmail">Email:</label>
+                            <input type="email" id="registerEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerPassword">Password:</label>
+                            <input type="password" id="registerPassword" required>
+                            <small>8+ characters with uppercase, lowercase, number, and special character</small>
+                        </div>
+                        <button type="submit" id="registerBtn">Register</button>
+                    </form>
+                    <div class="toggle-auth">
+                        <p>Already have an account? <a href="#" id="showLogin">Login here</a></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calculator Section -->
+            <div id="calculatorSection" class="calculator-section">
+                <div class="user-info">
+                    <strong>Welcome, <span id="username"></span>!</strong>
+                    <button onclick="logout()" class="btn-secondary" style="float: right; width: auto; padding: 8px 16px;">Logout</button>
+                </div>
+
+                <div class="examples">
+                    <h4>RPN Examples:</h4>
+                    <p><code>3 4 +</code> = 7 (equivalent to 3 + 4)</p>
+                    <p><code>5 1 2 + 4 * + 3 -</code> = 14 (equivalent to 5 + ((1 + 2) * 4) - 3)</p>
+                    <p><code>2 3 ^</code> = 8 (equivalent to 2^3)</p>
+                </div>
+
+                <div id="calculatorAlert"></div>
+
+                <form id="calculatorForm">
+                    <div class="form-group">
+                        <label for="expression">RPN Expression:</label>
+                        <input type="text" id="expression" placeholder="e.g., 3 4 + 5 *" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="verbose" style="width: auto; margin-right: 8px;">
+                            Show step-by-step calculation
+                        </label>
+                    </div>
+                    <button type="submit" id="calculateBtn">Calculate</button>
+                </form>
+
+                <div id="resultSection" class="result-section" style="display: none;">
+                    <h3>Result</h3>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+
+        // Check if user is already logged in
+        if (authToken) {
+            checkAuth();
+        }
+
+        // Auth form toggle
+        document.getElementById('showRegister').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+        });
+
+        document.getElementById('showLogin').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('loginForm').style.display = 'block';
+        });
+
+        // Login form
+        document.getElementById('loginFormElement').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+            
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span> Logging in...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    showCalculator();
+                    showAlert('Login successful!', 'success');
+                } else {
+                    showAlert(data.message || 'Login failed', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Login';
+            }
+        });
+
+        // Register form
+        document.getElementById('registerFormElement').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const registerBtn = document.getElementById('registerBtn');
+            
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading"></span> Registering...';
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    showCalculator();
+                    showAlert('Registration successful!', 'success');
+                } else {
+                    showAlert(data.message || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.innerHTML = 'Register';
+            }
+        });
+
+        // Calculator form
+        document.getElementById('calculatorForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const expression = document.getElementById('expression').value;
+            const verbose = document.getElementById('verbose').checked;
+            const calculateBtn = document.getElementById('calculateBtn');
+            
+            calculateBtn.disabled = true;
+            calculateBtn.innerHTML = '<span class="loading"></span> Calculating...';
+            
+            try {
+                const response = await fetch('/api/calculator/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ expression, verbose })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(data);
+                    showCalculatorAlert('Calculation completed!', 'success');
+                } else {
+                    showCalculatorAlert(data.message || 'Calculation failed', 'error');
+                    document.getElementById('resultSection').style.display = 'none';
+                }
+            } catch (error) {
+                showCalculatorAlert('Network error. Please try again.', 'error');
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.innerHTML = 'Calculate';
+            }
+        });
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    showCalculator();
+                } else {
+                    logout();
+                }
+            } catch (error) {
+                logout();
+            }
+        }
+
+        function showCalculator() {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('calculatorSection').style.display = 'block';
+            document.getElementById('username').textContent = currentUser.username;
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            document.getElementById('authSection').style.display = 'block';
+            document.getElementById('calculatorSection').style.display = 'none';
+            document.getElementById('resultSection').style.display = 'none';
+            clearAlerts();
+        }
+
+        function showAlert(message, type) {
+            const container = document.getElementById('alertContainer');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        function showCalculatorAlert(message, type) {
+            const container = document.getElementById('calculatorAlert');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        function clearAlerts() {
+            document.getElementById('alertContainer').innerHTML = '';
+            document.getElementById('calculatorAlert').innerHTML = '';
+        }
+
+        function showResult(data) {
+            const resultSection = document.getElementById('resultSection');
+            const resultContent = document.getElementById('resultContent');
+            
+            let html = `
+                <p><strong>Expression:</strong> ${data.expression}</p>
+                <p><strong>Result:</strong> ${data.result}</p>
+                <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>
+            `;
+            
+            if (data.steps && data.steps.length > 0) {
+                html += '<div class="steps"><h4>Step-by-step calculation:</h4>';
+                data.steps.forEach((step, index) => {
+                    if (step.action === 'push') {
+                        html += `<div class="step">Step ${index + 1}: Push ${step.value} → Stack: [${step.stack.join(', ')}]</div>`;
+                    } else if (step.action === 'operation') {
+                        html += `<div class="step">Step ${index + 1}: ${step.operands[0]} ${step.operator} ${step.operands[1]} = ${step.result} → Stack: [${step.stack.join(', ')}]</div>`;
+                    }
+                });
+                html += '</div>';
+            }
+            
+            resultContent.innerHTML = html;
+            resultSection.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
