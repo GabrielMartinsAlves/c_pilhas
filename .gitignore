@@ -1,0 +1,13 @@
+# Ignorar executáveis
+rpn_calculator
+*.exe
+*.o
+*.out
+
+# Ignorar arquivos temporários
+*.tmp
+*~
+.DS_Store
+
+# Ignorar arquivos de debug
+*.dSYM/
