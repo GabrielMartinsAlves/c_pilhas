@@ -51,6 +51,7 @@ Thumbs.db
 *.o
 *.out
 rpn_calculator
+rpn_calculator_cli
 a.out
 
 # Temporary files
