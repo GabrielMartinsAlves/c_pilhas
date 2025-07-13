@@ -15,7 +15,8 @@ npm start     # Iniciar servidor web
 ```
 Acesse: `http://localhost:3000` ➔ Faça login ➔ Use a calculadora!
 
-**📖 Documentação completa da web**: [README_WEB.md](README_WEB.md)
+**📖 Documentação completa da web**: [README_WEB.md](README_WEB.md)  
+**🔧 Guia de solução de problemas**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ---
 

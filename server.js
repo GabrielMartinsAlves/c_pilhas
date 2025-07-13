@@ -380,27 +380,62 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
-    return res.json({ success: false, error: 'Expressão inválida' });
+    return res.json({ success: false, error: 'Por favor, digite uma expressão RPN válida.' });
   }
   
-  // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  // Sanitize input - allow only numbers, spaces, and valid operators
+  const sanitizedExpression = expression.trim();
+  if (!sanitizedExpression) {
+    return res.json({ success: false, error: 'Expressão vazia. Digite uma expressão RPN válida.' });
+  }
+  
+  if (!/^[0-9\s+\-*/^.]+$/.test(sanitizedExpression)) {
+    return res.json({ 
+      success: false, 
+      error: 'Expressão contém caracteres inválidos. Use apenas números, espaços e operadores (+, -, *, /, ^).' 
+    });
+  }
+  
+  // Check for minimum valid expression (at least one number and one operator)
+  const tokens = sanitizedExpression.split(/\s+/).filter(token => token.length > 0);
+  if (tokens.length < 3) {
+    return res.json({ 
+      success: false, 
+      error: 'Expressão muito curta. Uma expressão RPN precisa de pelo menos 2 números e 1 operador (ex: "3 4 +").' 
+    });
+  }
+  
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
-  // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
+  // Prepare command arguments
+  const args = sanitizedExpression.split(/\s+/);
+  if (verbose) {
+    args.push('--verbose');
+  }
+  
+  // Execute the C program with command line arguments
+  const child = exec(`"${calculatorPath}" ${args.map(arg => `"${arg}"`).join(' ')}`, { timeout: 10000 }, (error, stdout, stderr) => {
     if (error) {
       console.error('Execution error:', error);
+      
+      // Check if it's a calculation error (exit code 1) vs system error
+      if (error.code === 1 && stderr) {
+        return res.json({ success: false, error: stderr.trim() });
+      } else if (error.code === 1 && stdout && stdout.includes('Erro:')) {
+        const errorMatch = stdout.match(/Erro:[^]*$/);
+        return res.json({ success: false, error: errorMatch ? errorMatch[0].trim() : 'Erro no cálculo' });
+      }
+      
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
     }
     
     if (stderr) {
       console.error('Stderr:', stderr);
-      return res.json({ success: false, error: stderr });
+      return res.json({ success: false, error: stderr.trim() });
     }
     
     // Parse the output to extract the result
-    const output = stdout.toString();
+    const output = stdout.toString().trim();
     
     // Check for error messages in the output
     if (output.includes('Erro:') || output.includes('Error:')) {
@@ -413,10 +448,6 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     
     res.json({ success: true, output: output });
   });
-  
-  // Send input to the C program
-  child.stdin.write(inputData);
-  child.stdin.end();
 });
 
 // Error handling

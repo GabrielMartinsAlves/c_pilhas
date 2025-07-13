@@ -56,3 +56,7 @@ a.out
 # Temporary files
 *.tmp
 *.temp
+
+# Test scripts
+test_calculator.sh
+test_web_api.sh
