@@ -107,6 +107,49 @@ app.get('/', (req, res) => {
             color: #28a745;
             font-weight: bold;
           }
+          
+          /* Mobile optimizations */
+          @media (max-width: 768px) {
+            body {
+              padding: 10px;
+              justify-content: flex-start;
+              padding-top: 20px;
+            }
+            .container {
+              padding: 20px;
+              margin: 0;
+            }
+            h1 {
+              font-size: 2em;
+              margin-bottom: 20px;
+            }
+            .description {
+              font-size: 1em;
+              margin: 15px 0;
+            }
+            .features {
+              margin: 20px 0;
+              padding: 15px;
+            }
+            .features h3 {
+              margin-top: 0;
+              margin-bottom: 15px;
+            }
+            .features li {
+              margin: 8px 0;
+              font-size: 0.9em;
+            }
+            .login-btn {
+              padding: 18px 40px;
+              font-size: 1.1em;
+              margin-top: 15px;
+              min-height: 44px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              touch-action: manipulation;
+            }
+          }
         </style>
       </head>
       <body>
