@@ -224,11 +224,37 @@ void menu() {
 
 // ========== FUNÇÃO PRINCIPAL ==========
 
-int main() {
+int main(int argc, char *argv[]) {
     char expressao[MAX_INPUT_SIZE];
     char backup[MAX_INPUT_SIZE];
     int opcao;
     double resultado;
+    
+    // Command-line mode for web interface integration
+    if (argc >= 2) {
+        // Construct expression from command line arguments
+        strcpy(expressao, argv[1]);
+        for (int i = 2; i < argc; i++) {
+            strcat(expressao, " ");
+            strcat(expressao, argv[i]);
+        }
+        
+        // Check for verbose flag
+        int verbose = 0;
+        if (argc > 1 && strcmp(argv[argc-1], "--verbose") == 0) {
+            verbose = 1;
+            // Remove --verbose from expression
+            char* lastSpace = strrchr(expressao, ' ');
+            if (lastSpace && strcmp(lastSpace + 1, "--verbose") == 0) {
+                *lastSpace = '\0';
+            }
+        }
+        
+        strcpy(backup, expressao);
+        resultado = avaliaRPN(expressao, verbose);
+        printf("%.6g\n", resultado);
+        return 0;
+    }
     
     printf("=== CALCULADORA DE NOTAÇÃO POLONESA REVERSA ===\n");
     printf("Desenvolvida para avaliação de expressões RPN\n");
@@ -292,4 +318,4 @@ int main() {
     }
     
     return 0;
-}// Nova linha adicionada via API
+}
