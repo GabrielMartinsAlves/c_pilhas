@@ -2,10 +2,63 @@ const express = require('express');
 const { auth, requiresAuth } = require('express-openid-connect');
 const { exec } = require('child_process');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Task monitoring system
+const activeTasks = new Map();
+const taskHistory = [];
+const MAX_HISTORY_SIZE = 100;
+
+// Task status constants
+const TASK_STATUS = {
+  CREATED: 'created',
+  RUNNING: 'running', 
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  TIMEOUT: 'timeout'
+};
+
+// Helper function to generate unique task ID
+function generateTaskId() {
+  return crypto.randomBytes(8).toString('hex');
+}
+
+// Helper function to log task event
+function logTaskEvent(taskId, event, data = {}) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] Task ${taskId}: ${event}`, data);
+}
+
+// Helper function to update task status
+function updateTaskStatus(taskId, status, data = {}) {
+  if (activeTasks.has(taskId)) {
+    const task = activeTasks.get(taskId);
+    task.status = status;
+    task.lastUpdate = Date.now();
+    if (data.result) task.result = data.result;
+    if (data.error) task.error = data.error;
+    if (data.pid) task.pid = data.pid;
+    
+    logTaskEvent(taskId, `Status changed to ${status}`, data);
+    
+    // Move completed/failed tasks to history
+    if (status === TASK_STATUS.COMPLETED || status === TASK_STATUS.FAILED || status === TASK_STATUS.TIMEOUT) {
+      task.endTime = Date.now();
+      task.duration = task.endTime - task.startTime;
+      
+      // Add to history and remove from active tasks
+      taskHistory.unshift(task);
+      if (taskHistory.length > MAX_HISTORY_SIZE) {
+        taskHistory.pop();
+      }
+      activeTasks.delete(taskId);
+    }
+  }
+}
 
 // Auth0 configuration
 const config = {
@@ -17,8 +70,13 @@ const config = {
   issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
 };
 
-// Auth router attaches /login, /logout, and /callback routes to the baseURL
-app.use(auth(config));
+// Only use auth if properly configured
+const useAuth = config.clientID && config.issuerBaseURL;
+
+if (useAuth) {
+  // Auth router attaches /login, /logout, and /callback routes to the baseURL
+  app.use(auth(config));
+}
 
 // Middleware
 app.use(express.json());
@@ -27,7 +85,9 @@ app.use(express.static('public'));
 
 // Check if user is authenticated
 app.get('/', (req, res) => {
-  if (req.oidc.isAuthenticated()) {
+  if (useAuth && req.oidc && req.oidc.isAuthenticated()) {
+    res.redirect('/calculator');
+  } else if (!useAuth) {
     res.redirect('/calculator');
   } else {
     res.send(`
@@ -136,8 +196,30 @@ app.get('/', (req, res) => {
   }
 });
 
-// Protected calculator route
-app.get('/calculator', requiresAuth(), (req, res) => {
+// API endpoint for task monitoring
+app.get('/api/tasks', useAuth ? requiresAuth() : (req, res, next) => next(), (req, res) => {
+  const currentTime = Date.now();
+  
+  // Convert active tasks to array with additional info
+  const activeTasksList = Array.from(activeTasks.values()).map(task => ({
+    ...task,
+    runningTime: currentTime - task.startTime
+  }));
+  
+  res.json({
+    active: activeTasksList,
+    history: taskHistory.slice(0, 20), // Last 20 completed tasks
+    stats: {
+      totalActive: activeTasks.size,
+      totalHistory: taskHistory.length,
+      avgDuration: taskHistory.length > 0 ? 
+        taskHistory.reduce((sum, task) => sum + (task.duration || 0), 0) / taskHistory.length : 0
+    }
+  });
+});
+
+// Enhanced calculator route with task monitoring info
+app.get('/calculator', useAuth ? requiresAuth() : (req, res, next) => next(), (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -275,8 +357,8 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       <div class="header">
         <h1>🧮 RPN Calculator</h1>
         <div class="user-info">
-          <span>Bem-vindo, ${req.oidc.user.name || req.oidc.user.email}!</span>
-          <a href="/logout" class="logout-btn">Logout</a>
+          <span>Bem-vindo, ${useAuth && req.oidc ? (req.oidc.user.name || req.oidc.user.email) : 'Usuário de Teste'}!</span>
+          ${useAuth ? '<a href="/logout" class="logout-btn">Logout</a>' : '<span style="color: #ffc107;">Modo de Teste</span>'}
         </div>
       </div>
       
@@ -314,6 +396,16 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           <div class="example" onclick="useExample('15 7 1 1 + - / 3 * 2 1 1 + + -')">
             <strong>15 7 1 1 + - / 3 * 2 1 1 + + -</strong> → Exemplo avançado (5)
           </div>
+        </div>
+        
+        <div class="monitoring-container" style="margin-top: 30px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
+          <h3>🔍 Monitoramento de Tasks</h3>
+          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <button onclick="refreshTasks()" style="background: #17a2b8; padding: 8px 16px; font-size: 14px;">Atualizar Status</button>
+            <button onclick="toggleMonitoring()" id="monitoringToggle" style="background: #6c757d; padding: 8px 16px; font-size: 14px;">Mostrar Detalhes</button>
+          </div>
+          <div id="taskStats" style="margin-bottom: 15px; font-family: monospace; font-size: 14px;"></div>
+          <div id="taskDetails" style="display: none; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px;"></div>
         </div>
       </div>
       
@@ -353,9 +445,9 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             loadingDiv.style.display = 'none';
             
             if (data.success) {
-              resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
+              resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\\n<small style="opacity: 0.7;">Task ID: \${data.taskId || 'N/A'}</small>\`;
             } else {
-              resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\`;
+              resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\\n<small style="opacity: 0.7;">Task ID: \${data.taskId || 'N/A'}</small>\`;
             }
           } catch (error) {
             loadingDiv.style.display = 'none';
@@ -369,6 +461,87 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             calculate(false);
           }
         });
+        
+        // Task monitoring functions
+        let monitoringVisible = false;
+        let monitoringInterval = null;
+        
+        function refreshTasks() {
+          fetch('/api/tasks')
+            .then(response => response.json())
+            .then(data => {
+              updateTaskStats(data);
+              if (monitoringVisible) {
+                updateTaskDetails(data);
+              }
+            })
+            .catch(error => {
+              console.error('Error fetching tasks:', error);
+            });
+        }
+        
+        function updateTaskStats(data) {
+          const statsDiv = document.getElementById('taskStats');
+          statsDiv.innerHTML = \`
+            📊 Tasks Ativas: \${data.active.length} | 
+            📈 Histórico: \${data.stats.totalHistory} | 
+            ⏱️ Tempo Médio: \${data.stats.avgDuration.toFixed(0)}ms
+          \`;
+        }
+        
+        function updateTaskDetails(data) {
+          const detailsDiv = document.getElementById('taskDetails');
+          let html = '<strong>🔄 TASKS ATIVAS:</strong>\\n';
+          
+          if (data.active.length === 0) {
+            html += 'Nenhuma task ativa\\n';
+          } else {
+            data.active.forEach(task => {
+              html += \`[\${task.id}] \${task.expression} - \${task.status} (\${task.runningTime}ms)\\n\`;
+              if (task.pid) html += \`  PID: \${task.pid}\\n\`;
+            });
+          }
+          
+          html += '\\n<strong>📋 HISTÓRICO RECENTE:</strong>\\n';
+          data.history.slice(0, 5).forEach(task => {
+            const statusIcon = task.status === 'completed' ? '✅' : 
+                             task.status === 'failed' ? '❌' : 
+                             task.status === 'timeout' ? '⏰' : '❓';
+            html += \`\${statusIcon} [\${task.id}] \${task.expression} - \${task.duration}ms\\n\`;
+          });
+          
+          detailsDiv.innerHTML = html;
+        }
+        
+        function toggleMonitoring() {
+          const detailsDiv = document.getElementById('taskDetails');
+          const toggleBtn = document.getElementById('monitoringToggle');
+          
+          monitoringVisible = !monitoringVisible;
+          
+          if (monitoringVisible) {
+            detailsDiv.style.display = 'block';
+            toggleBtn.textContent = 'Ocultar Detalhes';
+            toggleBtn.style.background = '#28a745';
+            
+            // Start auto-refresh every 2 seconds
+            monitoringInterval = setInterval(refreshTasks, 2000);
+            refreshTasks(); // Initial load
+          } else {
+            detailsDiv.style.display = 'none';
+            toggleBtn.textContent = 'Mostrar Detalhes';
+            toggleBtn.style.background = '#6c757d';
+            
+            // Stop auto-refresh
+            if (monitoringInterval) {
+              clearInterval(monitoringInterval);
+              monitoringInterval = null;
+            }
+          }
+        }
+        
+        // Initialize with basic stats
+        refreshTasks();
       </script>
     </body>
     </html>
@@ -376,27 +549,49 @@ app.get('/calculator', requiresAuth(), (req, res) => {
 });
 
 // API endpoint to execute RPN calculator
-app.post('/api/calculate', requiresAuth(), (req, res) => {
+app.post('/api/calculate', useAuth ? requiresAuth() : (req, res, next) => next(), (req, res) => {
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
     return res.json({ success: false, error: 'Expressão inválida' });
   }
+
+  // Create unique task ID and track the task
+  const taskId = generateTaskId();
+  const task = {
+    id: taskId,
+    expression: expression,
+    verbose: verbose || false,
+    status: TASK_STATUS.CREATED,
+    startTime: Date.now(),
+    user: (useAuth && req.oidc && req.oidc.user) ? (req.oidc.user.email || req.oidc.user.name || 'unknown') : 'test-user'
+  };
+  
+  activeTasks.set(taskId, task);
+  logTaskEvent(taskId, 'Task created', { expression, verbose, user: task.user });
   
   // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  const inputData = verbose ? '2\n' + expression + '\n\n4\n' : '1\n' + expression + '\n\n4\n';
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
+  
+  // Update task status to running
+  updateTaskStatus(taskId, TASK_STATUS.RUNNING);
   
   // Execute the C program
   const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
     if (error) {
-      console.error('Execution error:', error);
-      return res.json({ success: false, error: 'Erro na execução do cálculo' });
+      const errorMsg = error.code === 'ETIMEDOUT' ? 'Timeout na execução do cálculo' : 'Erro na execução do cálculo';
+      const status = error.code === 'ETIMEDOUT' ? TASK_STATUS.TIMEOUT : TASK_STATUS.FAILED;
+      
+      logTaskEvent(taskId, 'Execution error', { error: error.message, code: error.code });
+      updateTaskStatus(taskId, status, { error: errorMsg });
+      return res.json({ success: false, error: errorMsg, taskId });
     }
     
     if (stderr) {
-      console.error('Stderr:', stderr);
-      return res.json({ success: false, error: stderr });
+      logTaskEvent(taskId, 'Stderr output', { stderr });
+      updateTaskStatus(taskId, TASK_STATUS.FAILED, { error: stderr });
+      return res.json({ success: false, error: stderr, taskId });
     }
     
     // Parse the output to extract the result
@@ -405,14 +600,26 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     // Check for error messages in the output
     if (output.includes('Erro:') || output.includes('Error:')) {
       const errorMatch = output.match(/Erro:.*|Error:.*/);
+      const errorMsg = errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo';
+      
+      logTaskEvent(taskId, 'Calculation error in output', { errorMsg });
+      updateTaskStatus(taskId, TASK_STATUS.FAILED, { error: errorMsg });
       return res.json({ 
         success: false, 
-        error: errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo' 
+        error: errorMsg,
+        taskId
       });
     }
     
-    res.json({ success: true, output: output });
+    logTaskEvent(taskId, 'Calculation completed successfully');
+    updateTaskStatus(taskId, TASK_STATUS.COMPLETED, { result: output });
+    res.json({ success: true, output: output, taskId });
   });
+  
+  // Track the process PID
+  if (child.pid) {
+    updateTaskStatus(taskId, TASK_STATUS.RUNNING, { pid: child.pid });
+  }
   
   // Send input to the C program
   child.stdin.write(inputData);
