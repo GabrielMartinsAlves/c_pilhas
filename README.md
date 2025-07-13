@@ -1,21 +1,54 @@
 # Calculadora de Notação Polonesa Reversa (RPN)
 
-## 🌟 Novidade: Interface Web com Auth0!
+## 🌟 Novidade: Interface Web com Auth0 + Individual Worker Tests + Task Monitoring!
 
 🔐 **Agora disponível: Sistema de login seguro com Auth0!**
+🧪 **Novo: Testes individuais de componentes e monitoramento de tarefas!**
 
-Este projeto oferece **duas interfaces**:
+Este projeto oferece **duas interfaces** com recursos avançados:
 1. **🖥️ Aplicação Console C** - Versão original em linha de comando
-2. **🌐 Interface Web** - Nova versão com autenticação Auth0 e interface moderna
+2. **🌐 Interface Web** - Nova versão com autenticação Auth0, interface moderna, testes e monitoramento
 
 ### 🚀 Acesso Rápido - Interface Web
 ```bash
 ./setup.sh    # Configuração automática
 npm start     # Iniciar servidor web
 ```
-Acesse: `http://localhost:3000` ➔ Faça login ➔ Use a calculadora!
+Acesse: `http://localhost:3000` ➔ Faça login ➔ Use a calculadora ➔ Monitore tarefas!
 
 **📖 Documentação completa da web**: [README_WEB.md](README_WEB.md)
+**🧪 Documentação de testes e monitoramento**: [TESTING_AND_MONITORING.md](TESTING_AND_MONITORING.md)
+
+## 🧪 Novos Recursos: Testes e Monitoramento
+
+### Individual Worker Tests
+Sistema de testes para validação individual de componentes:
+- **Testes de pilha**: Operações básicas, proteção contra overflow
+- **Testes de precisão**: Múltiplas operações push/pop
+- **Relatórios detalhados**: Tempo de execução e status de cada teste
+
+```bash
+# Executar testes individuais
+./worker_tests
+
+# Ou via interface web
+# Clique no botão "🔧 Testes"
+```
+
+### Task Monitoring
+Sistema de monitoramento em tempo real para rastreamento de operações:
+- **Rastreamento de tarefas**: Cada cálculo é monitorado individualmente
+- **Dashboard web**: Interface de monitoramento em `/monitor`
+- **Estatísticas**: Métricas de performance e histórico
+- **Logs detalhados**: Registros completos de execução
+
+### Funcionalidades do Monitoramento
+- ✅ Tracking em tempo real de cálculos
+- 📊 Dashboard com estatísticas e histórico
+- 🔍 Logs detalhados para debugging
+- ⚡ Métricas de performance
+- 👥 Isolamento por usuário
+- 🔄 Atualização automática
 
 ---
 
@@ -23,7 +56,7 @@ Acesse: `http://localhost:3000` ➔ Faça login ➔ Use a calculadora!
 
 Este projeto implementa uma calculadora completa para avaliação de expressões matemáticas em **Notação Polonesa Reversa** (RPN), desenvolvida em linguagem C. A implementação utiliza uma estrutura de dados **pilha** (stack) como núcleo do algoritmo de avaliação, seguindo rigorosamente os princípios de **Tipos Abstratos de Dados** (TAD) e oferecendo funcionalidades avançadas como modo verbose para análise passo-a-passo e tratamento robusto de erros.
 
-**✨ Agora com interface web moderna e autenticação segura via Auth0!**
+**✨ Agora com interface web moderna, autenticação segura via Auth0, testes individuais de componentes e sistema de monitoramento de tarefas em tempo real!**
 
 ## Arquitetura e Design Técnico
 
