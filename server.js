@@ -232,6 +232,12 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         .verbose-btn:hover {
           background: #138496;
         }
+        .save-btn {
+          background: #28a745;
+        }
+        .save-btn:hover {
+          background: #218838;
+        }
         .clear-btn {
           background: #6c757d;
         }
@@ -269,6 +275,24 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           display: none;
           color: #ffc107;
         }
+        .saved-calculations {
+          margin-top: 30px;
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 10px;
+        }
+        .saved-item {
+          background: rgba(255,255,255,0.1);
+          padding: 10px;
+          margin: 10px 0;
+          border-radius: 5px;
+          border-left: 3px solid #007bff;
+        }
+        .save-message {
+          color: #28a745;
+          font-weight: bold;
+          margin-top: 10px;
+        }
       </style>
     </head>
     <body>
@@ -294,11 +318,21 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         <div class="btn-group">
           <button onclick="calculate(false)">Calcular</button>
           <button onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
+          <button onclick="saveResult()" class="save-btn">Salvar</button>
           <button onclick="clearAll()" class="clear-btn">Limpar</button>
         </div>
         
         <div class="loading" id="loading">🔄 Calculando...</div>
         <div id="result"></div>
+        <div id="save-message"></div>
+        
+        <div class="saved-calculations">
+          <h3>📋 Cálculos Salvos:</h3>
+          <div id="saved-list">
+            <p>Nenhum cálculo salvo ainda. Execute um cálculo e clique em "Salvar" para salvá-lo.</p>
+          </div>
+          <button onclick="downloadSaved()" style="margin-top: 15px; background: #6f42c1;">📥 Download Salvos</button>
+        </div>
         
         <div class="examples">
           <h3>Exemplos (clique para usar):</h3>
@@ -318,6 +352,25 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       </div>
       
       <script>
+        let lastCalculationResult = null;
+        let lastExpression = null;
+        let savedCalculations = JSON.parse(localStorage.getItem('rpn_saved_calculations') || '[]');
+        
+        function updateSavedList() {
+          const savedList = document.getElementById('saved-list');
+          if (savedCalculations.length === 0) {
+            savedList.innerHTML = '<p>Nenhum cálculo salvo ainda. Execute um cálculo e clique em "Salvar" para salvá-lo.</p>';
+          } else {
+            savedList.innerHTML = savedCalculations.map((item, index) => \`
+              <div class="saved-item">
+                <strong>\${item.expression}</strong> = \${item.result}<br>
+                <small>Salvo em: \${item.timestamp}</small>
+                <button onclick="deleteSaved(\${index})" style="float: right; background: #dc3545; padding: 5px 10px; border: none; border-radius: 3px; color: white; cursor: pointer;">🗑️</button>
+              </div>
+            \`).join('');
+          }
+        }
+        
         function useExample(expression) {
           document.getElementById('expression').value = expression;
         }
@@ -325,6 +378,57 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         function clearAll() {
           document.getElementById('expression').value = '';
           document.getElementById('result').innerHTML = '';
+          document.getElementById('save-message').innerHTML = '';
+          lastCalculationResult = null;
+          lastExpression = null;
+        }
+        
+        function saveResult() {
+          if (!lastCalculationResult || !lastExpression) {
+            document.getElementById('save-message').innerHTML = '<span style="color: #dc3545;">❌ Nenhum resultado para salvar. Execute um cálculo primeiro!</span>';
+            return;
+          }
+          
+          const calculation = {
+            expression: lastExpression,
+            result: lastCalculationResult,
+            timestamp: new Date().toLocaleString('pt-BR')
+          };
+          
+          savedCalculations.push(calculation);
+          localStorage.setItem('rpn_saved_calculations', JSON.stringify(savedCalculations));
+          
+          document.getElementById('save-message').innerHTML = '<span class="save-message">✅ Resultado salvo com sucesso!</span>';
+          updateSavedList();
+          
+          // Clear message after 3 seconds
+          setTimeout(() => {
+            document.getElementById('save-message').innerHTML = '';
+          }, 3000);
+        }
+        
+        function deleteSaved(index) {
+          savedCalculations.splice(index, 1);
+          localStorage.setItem('rpn_saved_calculations', JSON.stringify(savedCalculations));
+          updateSavedList();
+        }
+        
+        function downloadSaved() {
+          if (savedCalculations.length === 0) {
+            alert('Nenhum cálculo salvo para download.');
+            return;
+          }
+          
+          const data = savedCalculations.map(item => \`\${item.timestamp}: \${item.expression} = \${item.result}\`).join('\\n');
+          const blob = new Blob([data], { type: 'text/plain' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'rpn_calculations.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
         }
         
         async function calculate(verbose) {
@@ -354,12 +458,23 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             
             if (data.success) {
               resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
+              
+              // Extract the numeric result for saving
+              const resultMatch = data.output.match(/Resultado: ([\\d.-]+)/);
+              if (resultMatch) {
+                lastCalculationResult = resultMatch[1];
+                lastExpression = expression;
+              }
             } else {
               resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\`;
+              lastCalculationResult = null;
+              lastExpression = null;
             }
           } catch (error) {
             loadingDiv.style.display = 'none';
             resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro de conexão:</span>\\n\${error.message}\`;
+            lastCalculationResult = null;
+            lastExpression = null;
           }
         }
         
@@ -369,6 +484,9 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             calculate(false);
           }
         });
+        
+        // Initialize saved list on load
+        updateSavedList();
       </script>
     </body>
     </html>
@@ -383,12 +501,12 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     return res.json({ success: false, error: 'Expressão inválida' });
   }
   
-  // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  // Create input sequence for the C program
+  const inputData = verbose ? `2\n${expression}\n\n4\n` : `1\n${expression}\n\n4\n`;
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
-  // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
+  // Execute the C program with a proper timeout
+  const child = exec(calculatorPath, { timeout: 5000 }, (error, stdout, stderr) => {
     if (error) {
       console.error('Execution error:', error);
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
