@@ -13,8 +13,8 @@ const config = {
   auth0Logout: true,
   secret: process.env.AUTH0_SECRET || 'a-long-random-secret',
   baseURL: process.env.AUTH0_BASE_URL || 'http://localhost:3000',
-  clientID: process.env.AUTH0_CLIENT_ID,
-  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+  clientID: process.env.AUTH0_CLIENT_ID || 'test-client-id',
+  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL || 'https://test-domain.auth0.com',
 };
 
 // Auth router attaches /login, /logout, and /callback routes to the baseURL
@@ -24,6 +24,342 @@ app.use(auth(config));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+// Registration form route
+app.get('/register', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>RPN Calculator - Cadastro</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          padding: 20px; 
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .container {
+          background: rgba(255,255,255,0.1);
+          padding: 40px;
+          border-radius: 15px;
+          backdrop-filter: blur(10px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        h1 { 
+          margin-bottom: 30px; 
+          font-size: 2.5em;
+          text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+          text-align: center;
+        }
+        .form-group {
+          margin-bottom: 20px;
+        }
+        label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: bold;
+        }
+        .required {
+          color: #ff6b6b;
+        }
+        input[type="text"], input[type="email"], input[type="password"] {
+          width: 100%;
+          padding: 12px;
+          border: 2px solid transparent;
+          border-radius: 8px;
+          font-size: 16px;
+          background: rgba(255,255,255,0.9);
+          color: #333;
+          box-sizing: border-box;
+          transition: border-color 0.3s;
+        }
+        input:focus {
+          outline: none;
+          border-color: #007bff;
+        }
+        input.error {
+          border-color: #dc3545;
+          background: rgba(255,255,255,0.95);
+        }
+        input.valid {
+          border-color: #28a745;
+        }
+        .error-message {
+          color: #ff6b6b;
+          font-size: 14px;
+          margin-top: 5px;
+          display: none;
+        }
+        .error-message.show {
+          display: block;
+        }
+        .submit-btn {
+          background: #28a745;
+          color: white;
+          padding: 15px 30px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 1.1em;
+          width: 100%;
+          transition: background 0.3s;
+          margin-top: 20px;
+        }
+        .submit-btn:hover:not(:disabled) {
+          background: #218838;
+        }
+        .submit-btn:disabled {
+          background: #6c757d;
+          cursor: not-allowed;
+        }
+        .login-link {
+          text-align: center;
+          margin-top: 20px;
+        }
+        .login-link a {
+          color: #87ceeb;
+          text-decoration: none;
+        }
+        .login-link a:hover {
+          text-decoration: underline;
+        }
+        .success-message {
+          background: rgba(40, 167, 69, 0.2);
+          border: 1px solid #28a745;
+          color: #28a745;
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          display: none;
+        }
+        .success-message.show {
+          display: block;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>📝 Cadastro</h1>
+        
+        <div id="successMessage" class="success-message">
+          ✅ Cadastro realizado com sucesso!
+        </div>
+        
+        <form id="registerForm" novalidate>
+          <div class="form-group">
+            <label for="name">Nome Completo <span class="required">*</span></label>
+            <input type="text" id="name" name="name" required>
+            <div class="error-message" id="nameError">Nome é obrigatório</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="email">E-mail <span class="required">*</span></label>
+            <input type="email" id="email" name="email" required>
+            <div class="error-message" id="emailError">Digite um e-mail válido</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Senha <span class="required">*</span></label>
+            <input type="password" id="password" name="password" required minlength="8">
+            <div class="error-message" id="passwordError">Senha deve ter no mínimo 8 caracteres</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="confirmPassword">Confirmar Senha <span class="required">*</span></label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required>
+            <div class="error-message" id="confirmPasswordError">Senhas não coincidem</div>
+          </div>
+          
+          <button type="submit" class="submit-btn" id="submitBtn">Cadastrar</button>
+        </form>
+        
+        <div class="login-link">
+          <p>Já tem uma conta? <a href="/login">Fazer Login</a></p>
+        </div>
+      </div>
+      
+      <script>
+        class FormValidator {
+          constructor() {
+            this.form = document.getElementById('registerForm');
+            this.initializeValidation();
+          }
+          
+          initializeValidation() {
+            // Add real-time validation to all inputs
+            const inputs = this.form.querySelectorAll('input');
+            inputs.forEach(input => {
+              input.addEventListener('blur', () => this.validateField(input));
+              input.addEventListener('input', () => this.clearErrors(input));
+            });
+            
+            // Handle form submission
+            this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+          }
+          
+          validateField(input) {
+            const value = input.value.trim();
+            const fieldName = input.name;
+            let isValid = true;
+            let errorMessage = '';
+            
+            // Required field validation
+            if (input.hasAttribute('required') && !value) {
+              isValid = false;
+              errorMessage = this.getRequiredMessage(fieldName);
+            }
+            // Email validation
+            else if (fieldName === 'email' && value) {
+              const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+              if (!emailRegex.test(value)) {
+                isValid = false;
+                errorMessage = 'Digite um e-mail válido';
+              }
+            }
+            // Password validation
+            else if (fieldName === 'password' && value) {
+              if (value.length < 8) {
+                isValid = false;
+                errorMessage = 'Senha deve ter no mínimo 8 caracteres';
+              }
+            }
+            // Confirm password validation
+            else if (fieldName === 'confirmPassword' && value) {
+              const password = document.getElementById('password').value;
+              if (value !== password) {
+                isValid = false;
+                errorMessage = 'Senhas não coincidem';
+              }
+            }
+            
+            this.showFieldValidation(input, isValid, errorMessage);
+            return isValid;
+          }
+          
+          getRequiredMessage(fieldName) {
+            const messages = {
+              'name': 'Nome é obrigatório',
+              'email': 'E-mail é obrigatório',
+              'password': 'Senha é obrigatória',
+              'confirmPassword': 'Confirmação de senha é obrigatória'
+            };
+            return messages[fieldName] || 'Campo obrigatório';
+          }
+          
+          showFieldValidation(input, isValid, errorMessage) {
+            const errorElement = document.getElementById(input.name + 'Error');
+            
+            if (isValid) {
+              input.classList.remove('error');
+              input.classList.add('valid');
+              errorElement.classList.remove('show');
+            } else {
+              input.classList.add('error');
+              input.classList.remove('valid');
+              errorElement.textContent = errorMessage;
+              errorElement.classList.add('show');
+            }
+          }
+          
+          clearErrors(input) {
+            input.classList.remove('error');
+            const errorElement = document.getElementById(input.name + 'Error');
+            if (errorElement) {
+              errorElement.classList.remove('show');
+            }
+          }
+          
+          validateForm() {
+            const inputs = this.form.querySelectorAll('input[required]');
+            let isFormValid = true;
+            
+            inputs.forEach(input => {
+              const isFieldValid = this.validateField(input);
+              if (!isFieldValid) {
+                isFormValid = false;
+              }
+            });
+            
+            return isFormValid;
+          }
+          
+          async handleSubmit(e) {
+            e.preventDefault();
+            
+            if (!this.validateForm()) {
+              return;
+            }
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Cadastrando...';
+            
+            try {
+              const formData = new FormData(this.form);
+              const data = Object.fromEntries(formData.entries());
+              
+              const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                document.getElementById('successMessage').classList.add('show');
+                this.form.reset();
+                // Remove validation classes
+                this.form.querySelectorAll('input').forEach(input => {
+                  input.classList.remove('valid', 'error');
+                });
+                setTimeout(() => {
+                  window.location.href = '/login';
+                }, 2000);
+              } else {
+                // Show server-side validation errors
+                if (result.errors) {
+                  Object.keys(result.errors).forEach(field => {
+                    const input = document.getElementById(field);
+                    if (input) {
+                      this.showFieldValidation(input, false, result.errors[field]);
+                    }
+                  });
+                } else {
+                  alert('Erro no cadastro: ' + result.message);
+                }
+              }
+            } catch (error) {
+              alert('Erro de conexão: ' + error.message);
+            } finally {
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalText;
+            }
+          }
+        }
+        
+        // Initialize form validation when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+          new FormValidator();
+        });
+      </script>
+    </body>
+    </html>
+  `);
+});
 
 // Check if user is authenticated
 app.get('/', (req, res) => {
@@ -128,7 +464,10 @@ app.get('/', (req, res) => {
           </div>
           
           <p>Para acessar a calculadora, você precisa fazer login:</p>
-          <a href="/login" class="login-btn">🔐 Fazer Login</a>
+          <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="/login" class="login-btn">🔐 Fazer Login</a>
+            <a href="/register" class="login-btn" style="background: #17a2b8;">📝 Cadastrar</a>
+          </div>
         </div>
       </body>
       </html>
@@ -373,6 +712,74 @@ app.get('/calculator', requiresAuth(), (req, res) => {
     </body>
     </html>
   `);
+});
+
+// API endpoint for user registration
+app.post('/api/register', (req, res) => {
+  const { name, email, password, confirmPassword } = req.body;
+  
+  // Server-side validation
+  const errors = {};
+  
+  // Required fields validation
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    errors.name = 'Nome é obrigatório';
+  }
+  
+  if (!email || typeof email !== 'string' || email.trim().length === 0) {
+    errors.email = 'E-mail é obrigatório';
+  } else {
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      errors.email = 'Digite um e-mail válido';
+    }
+  }
+  
+  if (!password || typeof password !== 'string') {
+    errors.password = 'Senha é obrigatória';
+  } else {
+    // Password length validation
+    if (password.length < 8) {
+      errors.password = 'Senha deve ter no mínimo 8 caracteres';
+    }
+  }
+  
+  if (!confirmPassword || typeof confirmPassword !== 'string') {
+    errors.confirmPassword = 'Confirmação de senha é obrigatória';
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = 'Senhas não coincidem';
+  }
+  
+  // If there are validation errors, return them
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Dados inválidos',
+      errors: errors
+    });
+  }
+  
+  // Here you would typically save the user to a database
+  // For this demo, we'll just simulate a successful registration
+  console.log('New user registration:', {
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    // Never log passwords in production
+    registrationTime: new Date().toISOString()
+  });
+  
+  // Simulate processing time
+  setTimeout(() => {
+    res.json({
+      success: true,
+      message: 'Cadastro realizado com sucesso',
+      data: {
+        name: name.trim(),
+        email: email.trim().toLowerCase()
+      }
+    });
+  }, 500);
 });
 
 // API endpoint to execute RPN calculator
