@@ -7,18 +7,47 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Auth0 configuration
-const config = {
-  authRequired: false,
-  auth0Logout: true,
-  secret: process.env.AUTH0_SECRET || 'a-long-random-secret',
-  baseURL: process.env.AUTH0_BASE_URL || 'http://localhost:3000',
-  clientID: process.env.AUTH0_CLIENT_ID,
-  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+// Task monitoring system
+let taskStats = {
+  totalCalculations: 0,
+  successfulCalculations: 0,
+  failedCalculations: 0,
+  startTime: new Date(),
+  lastCalculation: null
 };
 
-// Auth router attaches /login, /logout, and /callback routes to the baseURL
-app.use(auth(config));
+// Auth0 configuration - conditional setup
+const hasAuth0Config = process.env.AUTH0_CLIENT_ID && process.env.AUTH0_ISSUER_BASE_URL;
+let authMiddleware = null;
+
+if (hasAuth0Config) {
+  const config = {
+    authRequired: false,
+    auth0Logout: true,
+    secret: process.env.AUTH0_SECRET || 'a-long-random-secret',
+    baseURL: process.env.AUTH0_BASE_URL || 'http://localhost:3000',
+    clientID: process.env.AUTH0_CLIENT_ID,
+    issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+  };
+  
+  // Auth router attaches /login, /logout, and /callback routes to the baseURL
+  app.use(auth(config));
+  authMiddleware = requiresAuth();
+} else {
+  console.log('⚠️  Running in development mode without Auth0 authentication');
+  // Mock authentication middleware for development - apply to all routes
+  app.use((req, res, next) => {
+    req.oidc = {
+      isAuthenticated: () => true,
+      user: { name: 'Development User', email: 'dev@localhost' }
+    };
+    next();
+  });
+  // Mock authentication middleware for development
+  authMiddleware = (req, res, next) => {
+    next();
+  };
+}
 
 // Middleware
 app.use(express.json());
@@ -28,6 +57,9 @@ app.use(express.static('public'));
 // Check if user is authenticated
 app.get('/', (req, res) => {
   if (req.oidc.isAuthenticated()) {
+    res.redirect('/calculator');
+  } else if (!hasAuth0Config) {
+    // In development mode without Auth0, redirect directly to calculator
     res.redirect('/calculator');
   } else {
     res.send(`
@@ -137,7 +169,7 @@ app.get('/', (req, res) => {
 });
 
 // Protected calculator route
-app.get('/calculator', requiresAuth(), (req, res) => {
+app.get('/calculator', authMiddleware, (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -269,6 +301,35 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           display: none;
           color: #ffc107;
         }
+        .monitoring {
+          margin-top: 30px;
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 10px;
+        }
+        .monitoring-item {
+          display: flex;
+          justify-content: space-between;
+          margin: 10px 0;
+          padding: 8px;
+          background: rgba(255,255,255,0.05);
+          border-radius: 5px;
+        }
+        .monitoring-label {
+          font-weight: bold;
+        }
+        .monitoring-value {
+          color: #28a745;
+        }
+        .monitoring-refresh-btn {
+          background: #17a2b8;
+          margin-top: 15px;
+          padding: 8px 15px;
+          font-size: 14px;
+        }
+        .monitoring-refresh-btn:hover {
+          background: #138496;
+        }
       </style>
     </head>
     <body>
@@ -276,7 +337,7 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         <h1>🧮 RPN Calculator</h1>
         <div class="user-info">
           <span>Bem-vindo, ${req.oidc.user.name || req.oidc.user.email}!</span>
-          <a href="/logout" class="logout-btn">Logout</a>
+          ${hasAuth0Config ? '<a href="/logout" class="logout-btn">Logout</a>' : '<span style="color: #ffc107;">Modo Dev</span>'}
         </div>
       </div>
       
@@ -314,6 +375,17 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           <div class="example" onclick="useExample('15 7 1 1 + - / 3 * 2 1 1 + + -')">
             <strong>15 7 1 1 + - / 3 * 2 1 1 + + -</strong> → Exemplo avançado (5)
           </div>
+        </div>
+        
+        <div class="monitoring">
+          <h3>📊 Monitoramento de Tasks:</h3>
+          <div id="monitoring-data">
+            <div class="monitoring-item">
+              <span class="monitoring-label">Status do Servidor:</span>
+              <span class="monitoring-value" id="server-status">Carregando...</span>
+            </div>
+          </div>
+          <button onclick="updateMonitoring()" class="monitoring-refresh-btn">🔄 Atualizar</button>
         </div>
       </div>
       
@@ -369,6 +441,58 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             calculate(false);
           }
         });
+        
+        // Task monitoring functions
+        async function updateMonitoring() {
+          try {
+            const response = await fetch('/api/monitoring');
+            const data = await response.json();
+            
+            if (data.status) {
+              const monitoringData = document.getElementById('monitoring-data');
+              monitoringData.innerHTML = \`
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Status do Servidor:</span>
+                  <span class="monitoring-value">\${data.status.toUpperCase()}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Tempo Online:</span>
+                  <span class="monitoring-value">\${data.uptime}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Total de Cálculos:</span>
+                  <span class="monitoring-value">\${data.taskStats.totalCalculations}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Sucessos:</span>
+                  <span class="monitoring-value">\${data.taskStats.successfulCalculations}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Falhas:</span>
+                  <span class="monitoring-value">\${data.taskStats.failedCalculations}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Taxa de Sucesso:</span>
+                  <span class="monitoring-value">\${data.taskStats.successRate}</span>
+                </div>
+                <div class="monitoring-item">
+                  <span class="monitoring-label">Último Cálculo:</span>
+                  <span class="monitoring-value">\${data.taskStats.lastCalculation ? new Date(data.taskStats.lastCalculation).toLocaleString('pt-BR') : 'Nenhum'}</span>
+                </div>
+              \`;
+            }
+          } catch (error) {
+            document.getElementById('monitoring-data').innerHTML = 
+              '<div style="color: #dc3545;">❌ Erro ao carregar dados de monitoramento</div>';
+          }
+        }
+        
+        // Load monitoring data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+          updateMonitoring();
+          // Auto-refresh monitoring every 30 seconds
+          setInterval(updateMonitoring, 30000);
+        });
       </script>
     </body>
     </html>
@@ -376,26 +500,42 @@ app.get('/calculator', requiresAuth(), (req, res) => {
 });
 
 // API endpoint to execute RPN calculator
-app.post('/api/calculate', requiresAuth(), (req, res) => {
+app.post('/api/calculate', authMiddleware, (req, res) => {
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
+    taskStats.totalCalculations++;
+    taskStats.failedCalculations++;
     return res.json({ success: false, error: 'Expressão inválida' });
   }
   
+  taskStats.totalCalculations++;
+  taskStats.lastCalculation = new Date();
+  
   // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  const inputData = verbose ? '2\n' + expression + '\n\n4\n' : '1\n' + expression + '\n\n4\n';
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
-  // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
+  // Execute the C program with proper stdin handling
+  const child = exec(calculatorPath, { timeout: 3000 }, (error, stdout, stderr) => {
     if (error) {
+      // If killed by timeout, try to extract result from partial output
+      if (error.killed && error.signal === 'SIGTERM' && stdout) {
+        const output = stdout.toString();
+        const resultMatch = output.match(/Resultado:\s*([\d.-]+)/);
+        if (resultMatch) {
+          taskStats.successfulCalculations++;
+          return res.json({ success: true, output: `Resultado: ${resultMatch[1]}` });
+        }
+      }
       console.error('Execution error:', error);
+      taskStats.failedCalculations++;
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
     }
     
     if (stderr) {
       console.error('Stderr:', stderr);
+      taskStats.failedCalculations++;
       return res.json({ success: false, error: stderr });
     }
     
@@ -405,18 +545,39 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     // Check for error messages in the output
     if (output.includes('Erro:') || output.includes('Error:')) {
       const errorMatch = output.match(/Erro:.*|Error:.*/);
+      taskStats.failedCalculations++;
       return res.json({ 
         success: false, 
         error: errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo' 
       });
     }
     
+    taskStats.successfulCalculations++;
     res.json({ success: true, output: output });
   });
   
-  // Send input to the C program
-  child.stdin.write(inputData);
-  child.stdin.end();
+  // Send input to the C program immediately and close stdin
+  if (child.stdin) {
+    child.stdin.write(inputData);
+    child.stdin.end();
+  }
+});
+
+// Task monitoring endpoint
+app.get('/api/monitoring', authMiddleware, (req, res) => {
+  const uptime = Math.floor((new Date() - taskStats.startTime) / 1000);
+  const successRate = taskStats.totalCalculations > 0 
+    ? (taskStats.successfulCalculations / taskStats.totalCalculations * 100).toFixed(2)
+    : 0;
+  
+  res.json({
+    status: 'running',
+    uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${uptime % 60}s`,
+    taskStats: {
+      ...taskStats,
+      successRate: `${successRate}%`
+    }
+  });
 });
 
 // Error handling
@@ -429,12 +590,16 @@ app.use((err, req, res, next) => {
 app.listen(port, () => {
   console.log(`🚀 RPN Calculator server running at http://localhost:${port}`);
   console.log('📝 Auth0 configuration:');
-  console.log(`   - Base URL: ${config.baseURL}`);
-  console.log(`   - Client ID: ${config.clientID ? '✅ Configured' : '❌ Missing'}`);
-  console.log(`   - Issuer: ${config.issuerBaseURL ? '✅ Configured' : '❌ Missing'}`);
   
-  if (!config.clientID || !config.issuerBaseURL) {
-    console.log('⚠️  Please configure Auth0 credentials in .env file');
+  if (hasAuth0Config) {
+    console.log(`   - Base URL: ${process.env.AUTH0_BASE_URL || 'http://localhost:3000'}`);
+    console.log(`   - Client ID: ✅ Configured`);
+    console.log(`   - Issuer: ✅ Configured`);
+    console.log('🔐 Authentication: ENABLED');
+  } else {
+    console.log('   - Auth0: ❌ Not configured (running in development mode)');
+    console.log('🔓 Authentication: DISABLED (Development Mode)');
+    console.log('⚠️  To enable Auth0 authentication, configure credentials in .env file');
   }
 });
 
