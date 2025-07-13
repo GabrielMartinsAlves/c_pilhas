@@ -25,9 +25,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Check if user is authenticated
+// Check if user is authenticated or in demo mode
 app.get('/', (req, res) => {
-  if (req.oidc.isAuthenticated()) {
+  const isDemoMode = process.env.NODE_ENV === 'development' && req.query.demo === 'true';
+  
+  if (req.oidc.isAuthenticated() || isDemoMode) {
     res.redirect('/calculator');
   } else {
     res.send(`
@@ -137,7 +139,18 @@ app.get('/', (req, res) => {
 });
 
 // Protected calculator route
-app.get('/calculator', requiresAuth(), (req, res) => {
+app.get('/calculator', (req, res) => {
+  const isDemoMode = process.env.NODE_ENV === 'development' && req.query.demo === 'true';
+  
+  if (!req.oidc.isAuthenticated() && !isDemoMode) {
+    return res.redirect('/');
+  }
+  
+  const user = isDemoMode ? {
+    name: 'Demo User',
+    email: 'demo@example.com',
+    nickname: 'demo'
+  } : req.oidc.user;
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -180,6 +193,20 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         }
         .logout-btn:hover {
           background: #c82333;
+          text-decoration: none;
+          color: white;
+        }
+        .profile-btn {
+          background: #17a2b8;
+          color: white;
+          padding: 10px 20px;
+          text-decoration: none;
+          border-radius: 5px;
+          transition: background 0.3s;
+          margin-right: 10px;
+        }
+        .profile-btn:hover {
+          background: #138496;
           text-decoration: none;
           color: white;
         }
@@ -275,7 +302,8 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       <div class="header">
         <h1>🧮 RPN Calculator</h1>
         <div class="user-info">
-          <span>Bem-vindo, ${req.oidc.user.name || req.oidc.user.email}!</span>
+          <span>Bem-vindo, ${user.name || user.email}!</span>
+          <a href="/profile?demo=true" class="profile-btn">👤 Perfil</a>
           <a href="/logout" class="logout-btn">Logout</a>
         </div>
       </div>
@@ -375,6 +403,344 @@ app.get('/calculator', requiresAuth(), (req, res) => {
   `);
 });
 
+// Profile management route
+app.get('/profile', (req, res) => {
+  const isDemoMode = process.env.NODE_ENV === 'development' && req.query.demo === 'true';
+  
+  if (!req.oidc.isAuthenticated() && !isDemoMode) {
+    return res.redirect('/');
+  }
+  
+  const user = isDemoMode ? {
+    name: 'Demo User',
+    email: 'demo@example.com',
+    nickname: 'demo',
+    locale: 'pt-BR'
+  } : req.oidc.user;
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>RPN Calculator - Perfil do Usuário</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          max-width: 1000px; 
+          margin: 0 auto; 
+          padding: 20px; 
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          min-height: 100vh;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 30px;
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 15px;
+          backdrop-filter: blur(10px);
+        }
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+        .back-btn {
+          background: #6c757d;
+          color: white;
+          padding: 10px 20px;
+          text-decoration: none;
+          border-radius: 5px;
+          transition: background 0.3s;
+          margin-right: 10px;
+        }
+        .back-btn:hover {
+          background: #545b62;
+          text-decoration: none;
+          color: white;
+        }
+        .logout-btn {
+          background: #dc3545;
+          color: white;
+          padding: 10px 20px;
+          text-decoration: none;
+          border-radius: 5px;
+          transition: background 0.3s;
+        }
+        .logout-btn:hover {
+          background: #c82333;
+          text-decoration: none;
+          color: white;
+        }
+        .profile-container {
+          background: rgba(255,255,255,0.1);
+          padding: 30px;
+          border-radius: 15px;
+          backdrop-filter: blur(10px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .form-group {
+          margin-bottom: 20px;
+        }
+        label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: bold;
+          color: #fff;
+        }
+        input[type="text"], input[type="email"] {
+          width: 100%;
+          padding: 12px;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          background: rgba(255,255,255,0.9);
+          color: #333;
+          box-sizing: border-box;
+        }
+        input:disabled {
+          background: rgba(255,255,255,0.5);
+          color: #666;
+        }
+        .btn-group {
+          display: flex;
+          gap: 15px;
+          margin-top: 30px;
+        }
+        button {
+          background: #007bff;
+          color: white;
+          padding: 12px 25px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 16px;
+          transition: background 0.3s;
+          flex: 1;
+        }
+        button:hover {
+          background: #0056b3;
+        }
+        button:disabled {
+          background: #6c757d;
+          cursor: not-allowed;
+        }
+        .save-btn {
+          background: #28a745;
+        }
+        .save-btn:hover {
+          background: #218838;
+        }
+        .cancel-btn {
+          background: #6c757d;
+        }
+        .cancel-btn:hover {
+          background: #545b62;
+        }
+        .message {
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          font-weight: bold;
+        }
+        .message.success {
+          background: rgba(40, 167, 69, 0.2);
+          border: 1px solid #28a745;
+          color: #28a745;
+        }
+        .message.error {
+          background: rgba(220, 53, 69, 0.2);
+          border: 1px solid #dc3545;
+          color: #dc3545;
+        }
+        .loading {
+          display: none;
+          color: #ffc107;
+          text-align: center;
+          margin: 20px 0;
+        }
+        .info-section {
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 10px;
+          margin-bottom: 30px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>👤 Perfil do Usuário</h1>
+        <div class="user-info">
+          <a href="/calculator?demo=true" class="back-btn">⬅ Voltar à Calculadora</a>
+          <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+      </div>
+      
+      <div class="profile-container">
+        <div class="info-section">
+          <h3>Informações da Conta</h3>
+          <p>Gerencie suas informações pessoais e preferências da conta.</p>
+        </div>
+
+        <div id="message"></div>
+        <div class="loading" id="loading">🔄 Salvando informações...</div>
+        
+        <form id="profileForm">
+          <div class="form-group">
+            <label for="name">Nome Completo:</label>
+            <input 
+              type="text" 
+              id="name" 
+              name="name"
+              value="${user.name || ''}"
+              placeholder="Digite seu nome completo"
+              required
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="email">Email:</label>
+            <input 
+              type="email" 
+              id="email" 
+              name="email"
+              value="${user.email || ''}"
+              placeholder="Digite seu email"
+              disabled
+              title="Email é gerenciado pelo Auth0 e não pode ser alterado aqui"
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="nickname">Apelido:</label>
+            <input 
+              type="text" 
+              id="nickname" 
+              name="nickname"
+              value="${user.nickname || ''}"
+              placeholder="Digite seu apelido"
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="locale">Idioma Preferido:</label>
+            <input 
+              type="text" 
+              id="locale" 
+              name="locale"
+              value="${user.locale || 'pt-BR'}"
+              placeholder="ex: pt-BR, en-US"
+            >
+          </div>
+          
+          <div class="btn-group">
+            <button type="submit" class="save-btn" id="saveBtn">💾 Salvar</button>
+            <button type="button" class="cancel-btn" id="cancelBtn">❌ Cancelar</button>
+          </div>
+        </form>
+      </div>
+      
+      <script>
+        const form = document.getElementById('profileForm');
+        const saveBtn = document.getElementById('saveBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const messageDiv = document.getElementById('message');
+        const loadingDiv = document.getElementById('loading');
+        
+        // Store original values for cancel functionality
+        const originalValues = {
+          name: document.getElementById('name').value,
+          nickname: document.getElementById('nickname').value,
+          locale: document.getElementById('locale').value
+        };
+        
+        function showMessage(text, type) {
+          messageDiv.innerHTML = \`<div class="message \${type}">\${text}</div>\`;
+          setTimeout(() => {
+            messageDiv.innerHTML = '';
+          }, 5000);
+        }
+        
+        function setLoading(loading) {
+          loadingDiv.style.display = loading ? 'block' : 'none';
+          saveBtn.disabled = loading;
+          cancelBtn.disabled = loading;
+          
+          // Disable form inputs during loading
+          const inputs = form.querySelectorAll('input:not([disabled])');
+          inputs.forEach(input => input.disabled = loading);
+        }
+        
+        // Cancel button functionality
+        cancelBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          
+          // Reset form to original values
+          document.getElementById('name').value = originalValues.name;
+          document.getElementById('nickname').value = originalValues.nickname;
+          document.getElementById('locale').value = originalValues.locale;
+          
+          showMessage('✅ Alterações canceladas. Dados foram restaurados aos valores originais.', 'success');
+        });
+        
+        // Form submission
+        form.addEventListener('submit', async function(e) {
+          e.preventDefault();
+          
+          const formData = new FormData(form);
+          const data = Object.fromEntries(formData.entries());
+          
+          // Basic validation
+          if (!data.name.trim()) {
+            showMessage('❌ Nome é obrigatório!', 'error');
+            return;
+          }
+          
+          setLoading(true);
+          
+          try {
+            const response = await fetch('/api/profile', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              showMessage('✅ Perfil salvo com sucesso!', 'success');
+              
+              // Update original values for future cancel operations
+              originalValues.name = data.name;
+              originalValues.nickname = data.nickname;
+              originalValues.locale = data.locale;
+              
+            } else {
+              showMessage(\`❌ Erro ao salvar: \${result.error}\`, 'error');
+            }
+          } catch (error) {
+            showMessage(\`❌ Erro de conexão: \${error.message}\`, 'error');
+          } finally {
+            setLoading(false);
+          }
+        });
+        
+        // Enable form inputs after page load
+        window.addEventListener('load', function() {
+          setLoading(false);
+        });
+      </script>
+    </body>
+    </html>
+  `);
+});
+
 // API endpoint to execute RPN calculator
 app.post('/api/calculate', requiresAuth(), (req, res) => {
   const { expression, verbose } = req.body;
@@ -417,6 +783,59 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
   // Send input to the C program
   child.stdin.write(inputData);
   child.stdin.end();
+});
+
+// API endpoint to update user profile
+app.post('/api/profile', (req, res) => {
+  const isDemoMode = process.env.NODE_ENV === 'development';
+  
+  if (!req.oidc.isAuthenticated() && !isDemoMode) {
+    return res.status(401).json({ success: false, error: 'Não autenticado' });
+  }
+  const { name, nickname, locale } = req.body;
+  
+  // Basic validation
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return res.json({ success: false, error: 'Nome é obrigatório' });
+  }
+  
+  // Validate locale format if provided
+  if (locale && typeof locale === 'string' && locale.trim().length > 0) {
+    const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
+    if (!localePattern.test(locale.trim())) {
+      return res.json({ 
+        success: false, 
+        error: 'Formato de idioma inválido. Use formato como pt-BR ou en-US' 
+      });
+    }
+  }
+  
+  // In a real application, you would save this to a database
+  // For this demo, we'll simulate a successful save
+  try {
+    // Here you would typically:
+    // 1. Validate the user has permission to update this profile
+    // 2. Save the data to your database
+    // 3. Update the Auth0 user metadata if needed
+    
+    // Simulate processing time and success response
+    res.json({ 
+      success: true, 
+      message: 'Perfil atualizado com sucesso',
+      data: {
+        name: name.trim(),
+        nickname: nickname ? nickname.trim() : '',
+        locale: locale ? locale.trim() : 'pt-BR'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.json({ 
+      success: false, 
+      error: 'Erro interno. Tente novamente em alguns momentos.' 
+    });
+  }
 });
 
 // Error handling
