@@ -281,21 +281,23 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       </div>
       
       <div class="calculator-container">
-        <div class="form-group">
-          <label for="expression">Expressão RPN:</label>
-          <input 
-            type="text" 
-            id="expression" 
-            placeholder="Ex: 3 4 + 5 *" 
-            autocomplete="off"
-          >
-        </div>
-        
-        <div class="btn-group">
-          <button onclick="calculate(false)">Calcular</button>
-          <button onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
-          <button onclick="clearAll()" class="clear-btn">Limpar</button>
-        </div>
+        <form id="calculatorForm">
+          <div class="form-group">
+            <label for="expression">Expressão RPN:</label>
+            <input 
+              type="text" 
+              id="expression" 
+              placeholder="Ex: 3 4 + 5 *" 
+              autocomplete="off"
+            >
+          </div>
+          
+          <div class="btn-group">
+            <button type="button" onclick="calculate(false)">Calcular</button>
+            <button type="button" onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
+            <button type="button" onclick="clearAll()" class="clear-btn">Limpar</button>
+          </div>
+        </form>
         
         <div class="loading" id="loading">🔄 Calculando...</div>
         <div id="result"></div>
@@ -363,9 +365,16 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           }
         }
         
+        // Handle form submission
+        document.getElementById('calculatorForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          calculate(false);
+        });
+        
         // Allow Enter key to calculate
         document.getElementById('expression').addEventListener('keypress', function(e) {
           if (e.key === 'Enter') {
+            e.preventDefault();
             calculate(false);
           }
         });
