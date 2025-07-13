@@ -1,11 +1,17 @@
 const express = require('express');
 const { auth, requiresAuth } = require('express-openid-connect');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Check if Auth0 is properly configured
+const isAuth0Configured = process.env.AUTH0_CLIENT_ID && 
+                          process.env.AUTH0_ISSUER_BASE_URL && 
+                          process.env.AUTH0_CLIENT_ID !== 'your-auth0-client-id' &&
+                          process.env.AUTH0_ISSUER_BASE_URL !== 'https://your-domain.auth0.com';
 
 // Auth0 configuration
 const config = {
@@ -17,8 +23,12 @@ const config = {
   issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
 };
 
-// Auth router attaches /login, /logout, and /callback routes to the baseURL
-app.use(auth(config));
+// Only use Auth0 if properly configured
+if (isAuth0Configured) {
+  app.use(auth(config));
+} else {
+  console.log('⚠️  Auth0 not properly configured, running in demo mode');
+}
 
 // Middleware
 app.use(express.json());
@@ -27,7 +37,10 @@ app.use(express.static('public'));
 
 // Check if user is authenticated
 app.get('/', (req, res) => {
-  if (req.oidc.isAuthenticated()) {
+  if (isAuth0Configured && req.oidc && req.oidc.isAuthenticated()) {
+    res.redirect('/calculator');
+  } else if (!isAuth0Configured) {
+    // In demo mode, redirect directly to calculator
     res.redirect('/calculator');
   } else {
     res.send(`
@@ -128,7 +141,16 @@ app.get('/', (req, res) => {
           </div>
           
           <p>Para acessar a calculadora, você precisa fazer login:</p>
-          <a href="/login" class="login-btn">🔐 Fazer Login</a>
+          ${isAuth0Configured ? 
+            '<a href="/login" class="login-btn">🔐 Fazer Login</a>' :
+            `<div style="text-align: center; margin-top: 20px;">
+              <div style="background: rgba(255,193,7,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+                <strong>⚠️ Modo Demo</strong><br>
+                Auth0 não está configurado. Usando acesso direto para demonstração.
+              </div>
+              <a href="/calculator" class="login-btn">🧮 Acessar Calculadora</a>
+            </div>`
+          }
         </div>
       </body>
       </html>
@@ -137,7 +159,21 @@ app.get('/', (req, res) => {
 });
 
 // Protected calculator route
-app.get('/calculator', requiresAuth(), (req, res) => {
+app.get('/calculator', (req, res) => {
+  // Check authentication only if Auth0 is configured
+  if (isAuth0Configured && (!req.oidc || !req.oidc.isAuthenticated())) {
+    return res.redirect('/');
+  }
+  
+  // Get user info for display
+  const userName = isAuth0Configured && req.oidc ? 
+    (req.oidc.user.name || req.oidc.user.email) : 
+    'Usuário Demo';
+  
+  const logoutButton = isAuth0Configured ? 
+    '<a href="/logout" class="logout-btn">Logout</a>' :
+    '<span style="background: #17a2b8; color: white; padding: 10px 20px; border-radius: 5px;">Modo Demo</span>';
+  
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -275,8 +311,8 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       <div class="header">
         <h1>🧮 RPN Calculator</h1>
         <div class="user-info">
-          <span>Bem-vindo, ${req.oidc.user.name || req.oidc.user.email}!</span>
-          <a href="/logout" class="logout-btn">Logout</a>
+          <span>Bem-vindo, ${userName}!</span>
+          ${logoutButton}
         </div>
       </div>
       
@@ -376,47 +412,69 @@ app.get('/calculator', requiresAuth(), (req, res) => {
 });
 
 // API endpoint to execute RPN calculator
-app.post('/api/calculate', requiresAuth(), (req, res) => {
+app.post('/api/calculate', (req, res) => {
+  // Check authentication only if Auth0 is configured
+  if (isAuth0Configured && (!req.oidc || !req.oidc.isAuthenticated())) {
+    return res.status(401).json({ success: false, error: 'Não autenticado' });
+  }
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
     return res.json({ success: false, error: 'Expressão inválida' });
   }
   
-  // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
-  const calculatorPath = path.join(__dirname, 'rpn_calculator');
+  // Execute the C program using spawn for better error handling
+  const calculatorPath = path.join(__dirname, 'rpn_web');
+  const args = [expression];
+  if (verbose) args.push('verbose');
   
-  // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
-    if (error) {
-      console.error('Execution error:', error);
+  const child = spawn(calculatorPath, args, { timeout: 10000 });
+  
+  let stdout = '';
+  let stderr = '';
+  
+  child.stdout.on('data', (data) => {
+    stdout += data.toString();
+  });
+  
+  child.stderr.on('data', (data) => {
+    stderr += data.toString();
+  });
+  
+  child.on('close', (code) => {
+    if (code !== 0) {
+      // Check if stdout contains error message
+      if (stdout.includes('Erro:') || stdout.includes('Error:')) {
+        const errorMatch = stdout.match(/Erro:.*|Error:.*/);
+        return res.json({ 
+          success: false, 
+          error: errorMatch ? errorMatch[0] : 'Erro na execução do cálculo' 
+        });
+      }
+      
+      if (stderr) {
+        return res.json({ success: false, error: stderr.trim() });
+      }
+      
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
     }
     
-    if (stderr) {
-      console.error('Stderr:', stderr);
-      return res.json({ success: false, error: stderr });
-    }
-    
-    // Parse the output to extract the result
-    const output = stdout.toString();
-    
-    // Check for error messages in the output
-    if (output.includes('Erro:') || output.includes('Error:')) {
-      const errorMatch = output.match(/Erro:.*|Error:.*/);
+    // Check for error messages in successful output
+    if (stdout.includes('Erro:') || stdout.includes('Error:')) {
+      const errorMatch = stdout.match(/Erro:.*|Error:.*/);
       return res.json({ 
         success: false, 
         error: errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo' 
       });
     }
     
-    res.json({ success: true, output: output });
+    res.json({ success: true, output: stdout });
   });
   
-  // Send input to the C program
-  child.stdin.write(inputData);
-  child.stdin.end();
+  child.on('error', (error) => {
+    console.error('Spawn error:', error);
+    res.json({ success: false, error: 'Erro ao executar calculadora' });
+  });
 });
 
 // Error handling
@@ -430,11 +488,12 @@ app.listen(port, () => {
   console.log(`🚀 RPN Calculator server running at http://localhost:${port}`);
   console.log('📝 Auth0 configuration:');
   console.log(`   - Base URL: ${config.baseURL}`);
-  console.log(`   - Client ID: ${config.clientID ? '✅ Configured' : '❌ Missing'}`);
-  console.log(`   - Issuer: ${config.issuerBaseURL ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`   - Client ID: ${config.clientID && config.clientID !== 'your-auth0-client-id' ? '✅ Configured' : '❌ Missing/Invalid'}`);
+  console.log(`   - Issuer: ${config.issuerBaseURL && config.issuerBaseURL !== 'https://your-domain.auth0.com' ? '✅ Configured' : '❌ Missing/Invalid'}`);
   
-  if (!config.clientID || !config.issuerBaseURL) {
-    console.log('⚠️  Please configure Auth0 credentials in .env file');
+  if (!isAuth0Configured) {
+    console.log('⚠️  Running in DEMO MODE - Auth0 credentials not properly configured');
+    console.log('   To enable authentication, configure proper Auth0 credentials in .env file');
   }
 });
 
