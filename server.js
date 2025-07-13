@@ -7,7 +7,7 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Auth0 configuration - temporarily bypass for testing
+// Auth0 configuration
 const config = {
   authRequired: false,
   auth0Logout: true,
@@ -17,22 +17,128 @@ const config = {
   issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
 };
 
-// Temporarily disable auth middleware for testing
-// app.use(auth(config));
+// Auth router attaches /login, /logout, and /callback routes to the baseURL
+app.use(auth(config));
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Check if user is authenticated - temporarily bypass for testing
+// Check if user is authenticated
 app.get('/', (req, res) => {
-  // Always redirect to calculator for testing
-  res.redirect('/calculator');
+  if (req.oidc.isAuthenticated()) {
+    res.redirect('/calculator');
+  } else {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>RPN Calculator - Login Required</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+          }
+          .container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+          }
+          h1 { 
+            margin-bottom: 30px; 
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+          }
+          .login-btn {
+            background: #28a745;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            transition: background 0.3s;
+            display: inline-block;
+            margin-top: 20px;
+          }
+          .login-btn:hover {
+            background: #218838;
+            text-decoration: none;
+            color: white;
+          }
+          .description {
+            margin: 20px 0;
+            font-size: 1.1em;
+            line-height: 1.6;
+          }
+          .features {
+            text-align: left;
+            margin: 30px 0;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+          }
+          .features ul {
+            list-style-type: none;
+            padding: 0;
+          }
+          .features li {
+            margin: 10px 0;
+            padding-left: 20px;
+            position: relative;
+          }
+          .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🧮 RPN Calculator</h1>
+          <div class="description">
+            Calculadora de Notação Polonesa Reversa com autenticação segura
+          </div>
+          
+          <div class="features">
+            <h3>Recursos disponíveis:</h3>
+            <ul>
+              <li>Avaliação de expressões RPN</li>
+              <li>Operações matemáticas básicas (+, -, *, /, ^)</li>
+              <li>Modo verbose para análise passo-a-passo</li>
+              <li>Interface web intuitiva</li>
+              <li>Autenticação segura com Auth0</li>
+              <li>Salvar histórico de cálculos</li>
+            </ul>
+          </div>
+          
+          <p>Para acessar a calculadora, você precisa fazer login:</p>
+          <a href="/login" class="login-btn">🔐 Fazer Login</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
 });
 
-// Protected calculator route - temporarily remove auth for testing
-app.get('/calculator', (req, res) => {
+// Protected calculator route
+app.get('/calculator', requiresAuth(), (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -255,7 +361,7 @@ app.get('/calculator', (req, res) => {
       <div class="header">
         <h1>🧮 RPN Calculator</h1>
         <div class="user-info">
-          <span>Bem-vindo, Usuário de Teste!</span>
+          <span>Bem-vindo, ${req.oidc.user.name || req.oidc.user.email}!</span>
           <a href="/logout" class="logout-btn">Logout</a>
         </div>
       </div>
@@ -445,23 +551,20 @@ app.get('/calculator', (req, res) => {
             if (data.success) {
               resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
               
-              // Extract the numerical result for saving - try multiple patterns
-              let resultMatch = data.output.match(/Resultado:\s*(-?\d+(?:\.\d+)?)/);
-              if (!resultMatch) {
-                // Try without colon
-                resultMatch = data.output.match(/Resultado\s+(-?\d+(?:\.\d+)?)/);
-              }
-              if (!resultMatch) {
-                // Try with any whitespace
-                resultMatch = data.output.match(/Resultado[:\s]+(-?\d+(?:\.\d+)?)/);
-              }
-              const numericalResult = resultMatch ? resultMatch[1] : 'N/A';
+              // Extract the numerical result for saving - find number after "Resultado"
+              const lines = data.output.split('\\n');
+              let numericalResult = 'N/A';
               
-              // Debug: log to console
-              console.log('Output length:', data.output.length);
-              console.log('Contains Resultado:', data.output.includes('Resultado'));
-              console.log('Match:', resultMatch);
-              console.log('Numerical result:', numericalResult);
+              for (const line of lines) {
+                if (line.includes('Resultado')) {
+                  // Find all numbers in the line and take the last one (should be the result)
+                  const numbers = line.match(/-?\d+(?:\.\d+)?/g);
+                  if (numbers && numbers.length > 0) {
+                    numericalResult = numbers[numbers.length - 1];
+                    break;
+                  }
+                }
+              }
               
               lastCalculation = {
                 expression: expression,
@@ -504,8 +607,8 @@ app.get('/calculator', (req, res) => {
   `);
 });
 
-// API endpoint to execute RPN calculator - temporarily remove auth for testing
-app.post('/api/calculate', (req, res) => {
+// API endpoint to execute RPN calculator
+app.post('/api/calculate', requiresAuth(), (req, res) => {
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
