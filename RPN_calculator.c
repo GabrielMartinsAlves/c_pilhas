@@ -72,7 +72,7 @@ void imprimePilha(Stack* stack) {
     printf("Pilha: [");
     for (int i = 0; i <= stack->top; i++) {
         printf("%.2f", stack->data[i]);
-        if (i < stack->top) printf(", ");
+        if (i < stack->top) printf(". ");
     }
     printf("]\n");
 }
