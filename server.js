@@ -7,6 +7,9 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// In-memory storage for saved calculations
+const savedCalculations = [];
+
 // Auth0 configuration
 const config = {
   authRequired: false,
@@ -294,6 +297,7 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         <div class="btn-group">
           <button onclick="calculate(false)">Calcular</button>
           <button onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
+          <button onclick="saveCalculation()" class="save-btn">Salvar</button>
           <button onclick="clearAll()" class="clear-btn">Limpar</button>
         </div>
         
@@ -354,14 +358,51 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             
             if (data.success) {
               resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
+              lastCalculation = {
+                expression: data.expression || expression,
+                result: data.result || 'Calculado',
+                verbose: verbose,
+                output: data.output
+              };
             } else {
               resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\`;
+              lastCalculation = null;
             }
           } catch (error) {
             loadingDiv.style.display = 'none';
             resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro de conexão:</span>\\n\${error.message}\`;
+            lastCalculation = null;
           }
         }
+        
+        async function saveCalculation() {
+          if (!lastCalculation) {
+            document.getElementById('result').innerHTML = '<span style="color: #dc3545;">❌ Nenhum cálculo para salvar! Execute um cálculo primeiro.</span>';
+            return;
+          }
+          
+          try {
+            const response = await fetch('/api/save-calculation', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(lastCalculation)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+              document.getElementById('result').innerHTML += '<br><span style="color: #28a745;">💾 Cálculo salvo com sucesso!</span>';
+            } else {
+              document.getElementById('result').innerHTML += '<br><span style="color: #dc3545;">❌ Erro ao salvar: ' + data.error + '</span>';
+            }
+          } catch (error) {
+            document.getElementById('result').innerHTML += '<br><span style="color: #dc3545;">❌ Erro de conexão ao salvar: ' + error.message + '</span>';
+          }
+        }
+        
+        let lastCalculation = null;
         
         // Allow Enter key to calculate
         document.getElementById('expression').addEventListener('keypress', function(e) {
@@ -373,6 +414,44 @@ app.get('/calculator', requiresAuth(), (req, res) => {
     </body>
     </html>
   `);
+});
+
+// API endpoint to save a calculation
+app.post('/api/save-calculation', (req, res) => {
+  const { expression, result, verbose, output } = req.body;
+  
+  if (!expression || !result) {
+    return res.json({ success: false, error: 'Dados de cálculo inválidos' });
+  }
+  
+  const calculation = {
+    expression,
+    result,
+    verbose,
+    output,
+    timestamp: new Date().toISOString()
+  };
+  
+  savedCalculations.push(calculation);
+  
+  res.json({ success: true, message: 'Cálculo salvo com sucesso' });
+});
+
+// API endpoint to get saved calculations
+app.get('/api/saved-calculations', (req, res) => {
+  res.json({ success: true, calculations: savedCalculations });
+});
+
+// API endpoint to delete a saved calculation
+app.delete('/api/delete-calculation/:index', (req, res) => {
+  const index = parseInt(req.params.index);
+  
+  if (index >= 0 && index < savedCalculations.length) {
+    savedCalculations.splice(index, 1);
+    res.json({ success: true, message: 'Cálculo excluído com sucesso' });
+  } else {
+    res.json({ success: false, error: 'Índice inválido' });
+  }
 });
 
 // API endpoint to execute RPN calculator
@@ -388,7 +467,35 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
   // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
+  const child = exec(calculatorPath, { timeout: 5000 }, (error, stdout, stderr) => {
+    // Handle timeout gracefully - the program was killed due to hanging
+    if (error && error.signal === 'SIGTERM') {
+      // Parse the output we got before killing
+      const output = stdout.toString();
+      
+      // Extract just the result portion
+      const resultMatch = output.match(/Resultado: ([\d\.-]+)/);
+      const expressionMatch = output.match(/Expressão: ([^\n]+)/);
+      
+      if (resultMatch && expressionMatch) {
+        const result = resultMatch[1];
+        const expression = expressionMatch[1];
+        
+        let cleanOutput;
+        if (verbose) {
+          // For verbose mode, include the step-by-step calculation
+          cleanOutput = output;
+        } else {
+          // For normal mode, just show the clean result
+          cleanOutput = `Expressão: ${expression}\nResultado: ${result}`;
+        }
+        
+        return res.json({ success: true, output: cleanOutput, result: result, expression: expression });
+      } else {
+        return res.json({ success: true, output: output });
+      }
+    }
+    
     if (error) {
       console.error('Execution error:', error);
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
@@ -411,12 +518,39 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
       });
     }
     
-    res.json({ success: true, output: output });
+    // Extract just the result portion
+    const resultMatch = output.match(/Resultado: ([\d\.-]+)/);
+    const expressionMatch = output.match(/Expressão: ([^\n]+)/);
+    
+    if (resultMatch && expressionMatch) {
+      const result = resultMatch[1];
+      const expression = expressionMatch[1];
+      
+      let cleanOutput = output;
+      if (verbose) {
+        // For verbose mode, include the step-by-step calculation
+        cleanOutput = output;
+      } else {
+        // For normal mode, just show the clean result
+        cleanOutput = `Expressão: ${expression}\nResultado: ${result}`;
+      }
+      
+      res.json({ success: true, output: cleanOutput, result: result, expression: expression });
+    } else {
+      res.json({ success: true, output: output });
+    }
   });
   
   // Send input to the C program
   child.stdin.write(inputData);
   child.stdin.end();
+  
+  // Kill the process after a short delay to prevent hanging
+  setTimeout(() => {
+    if (!child.killed) {
+      child.kill();
+    }
+  }, 3000);
 });
 
 // Error handling
