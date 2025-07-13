@@ -1,0 +1,221 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
+
+#define MAX_STACK_SIZE 100
+#define MAX_INPUT_SIZE 1000
+#define MAX_TOKEN_SIZE 50
+
+// Estrutura da pilha
+typedef struct {
+    double data[MAX_STACK_SIZE];
+    int top;
+} Stack;
+
+// Estrutura para representar um token
+typedef enum {
+    TOKEN_NUMBER,
+    TOKEN_OPERATOR,
+    TOKEN_INVALID
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    union {
+        double number;
+        char operator;
+    } value;
+} Token;
+
+// ========== IMPLEMENTAÇÃO DO TAD PILHA ==========
+
+void inicializaPilha(Stack* stack) {
+    stack->top = -1;
+}
+
+int estaVazia(Stack* stack) {
+    return stack->top == -1;
+}
+
+int estaCheia(Stack* stack) {
+    return stack->top >= MAX_STACK_SIZE - 1;
+}
+
+int push(Stack* stack, double valor) {
+    if (estaCheia(stack)) {
+        fprintf(stderr, "Erro: Stack overflow\n");
+        return 0;
+    }
+    stack->data[++stack->top] = valor;
+    return 1;
+}
+
+double pop(Stack* stack) {
+    if (estaVazia(stack)) {
+        fprintf(stderr, "Erro: Stack underflow\n");
+        exit(1);
+    }
+    return stack->data[stack->top--];
+}
+
+double peek(Stack* stack) {
+    if (estaVazia(stack)) {
+        fprintf(stderr, "Erro: Pilha vazia\n");
+        exit(1);
+    }
+    return stack->data[stack->top];
+}
+
+void imprimePilha(Stack* stack) {
+    printf("Pilha: [");
+    for (int i = 0; i <= stack->top; i++) {
+        printf("%.2f", stack->data[i]);
+        if (i < stack->top) printf(", ");
+    }
+    printf("]\n");
+}
+
+// ========== FUNÇÕES DE TOKENIZAÇÃO ==========
+
+int isOperator(char c) {
+    return c == '+' || c == '-' || c == '*' || c == '/' || c == '^';
+}
+
+Token parseToken(char* tokenStr) {
+    Token token;
+    
+    // Remove espaços em branco
+    while (isspace(*tokenStr)) tokenStr++;
+    
+    if (strlen(tokenStr) == 0) {
+        token.type = TOKEN_INVALID;
+        return token;
+    }
+    
+    // Verifica se é um operador
+    if (strlen(tokenStr) == 1 && isOperator(tokenStr[0])) {
+        token.type = TOKEN_OPERATOR;
+        token.value.operator = tokenStr[0];
+        return token;
+    }
+    
+    // Tenta converter para número
+    char* endptr;
+    double num = strtod(tokenStr, &endptr);
+    
+    if (*endptr == '\0') {
+        token.type = TOKEN_NUMBER;
+        token.value.number = num;
+    } else {
+        token.type = TOKEN_INVALID;
+    }
+    
+    return token;
+}
+
+// ========== FUNÇÕES DE AVALIAÇÃO ==========
+
+double aplicaOperacao(double a, double b, char op) {
+    switch (op) {
+        case '+': return a + b;
+        case '-': return a - b;
+        case '*': return a * b;
+        case '/':
+            if (b == 0) {
+                fprintf(stderr, "Erro: Divisão por zero\n");
+                exit(1);
+            }
+            return a / b;
+        case '^': return pow(a, b);
+        default:
+            fprintf(stderr, "Erro: Operador inválido '%c'\n", op);
+            exit(1);
+    }
+}
+
+double avaliaRPN(char* expressao, int verbose) {
+    Stack pilha;
+    inicializaPilha(&pilha);
+    
+    char* token = strtok(expressao, " \t\n");
+    
+    if (verbose) {
+        printf("=== AVALIAÇÃO PASSO A PASSO ===\n");
+        printf("Expressão: %s\n", expressao);
+        printf("--------------------------------\n");
+    }
+    
+    while (token != NULL) {
+        Token t = parseToken(token);
+        
+        if (t.type == TOKEN_NUMBER) {
+            push(&pilha, t.value.number);
+            if (verbose) {
+                printf("Push %.2f -> ", t.value.number);
+                imprimePilha(&pilha);
+            }
+        }
+        else if (t.type == TOKEN_OPERATOR) {
+            if (pilha.top < 1) {
+                fprintf(stderr, "Erro: Operandos insuficientes para operador '%c'\n", t.value.operator);
+                exit(1);
+            }
+            
+            double b = pop(&pilha);
+            double a = pop(&pilha);
+            double resultado = aplicaOperacao(a, b, t.value.operator);
+            
+            push(&pilha, resultado);
+            
+            if (verbose) {
+                printf("%.2f %c %.2f = %.2f -> ", a, t.value.operator, b, resultado);
+                imprimePilha(&pilha);
+            }
+        }
+        else {
+            fprintf(stderr, "Erro: Token inválido '%s'\n", token);
+            exit(1);
+        }
+        
+        token = strtok(NULL, " \t\n");
+    }
+    
+    if (pilha.top != 0) {
+        fprintf(stderr, "Erro: Expressão mal formada (elementos restantes na pilha)\n");
+        exit(1);
+    }
+    
+    if (verbose) {
+        printf("--------------------------------\n");
+    }
+    
+    return peek(&pilha);
+}
+
+// ========== FUNÇÃO PRINCIPAL CLI ==========
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Uso: %s <expressao_rpn> [--verbose]\n", argv[0]);
+        fprintf(stderr, "Exemplo: %s \"3 4 +\"\n", argv[0]);
+        return 1;
+    }
+    
+    int verbose = 0;
+    if (argc > 2 && strcmp(argv[2], "--verbose") == 0) {
+        verbose = 1;
+    }
+    
+    // Cria uma cópia da expressão para preservar o original
+    char expressao[MAX_INPUT_SIZE];
+    strncpy(expressao, argv[1], MAX_INPUT_SIZE - 1);
+    expressao[MAX_INPUT_SIZE - 1] = '\0';
+    
+    double resultado = avaliaRPN(expressao, verbose);
+    
+    printf("Resultado: %.6g\n", resultado);
+    
+    return 0;
+}

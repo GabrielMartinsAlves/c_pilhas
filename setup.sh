@@ -29,6 +29,17 @@ else
     exit 1
 fi
 
+# Compile CLI version for API
+echo "🔨 Compiling RPN calculator CLI version..."
+gcc -o rpn_calculator_cli RPN_calculator_cli.c -lm
+
+if [ $? -eq 0 ]; then
+    echo "✅ CLI version compiled successfully"
+else
+    echo "❌ Failed to compile CLI version"
+    exit 1
+fi
+
 # Install Node.js dependencies
 echo "📦 Installing Node.js dependencies..."
 npm install
