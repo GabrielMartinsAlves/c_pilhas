@@ -8,15 +8,20 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "express-openid-connect": "^2.17.1",
+    "child_process": "^1.0.2",
     "dotenv": "^16.3.1",
-    "child_process": "^1.0.2"
+    "express": "^4.18.2",
+    "express-openid-connect": "^2.17.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["rpn", "calculator", "auth0", "authentication"],
+  "keywords": [
+    "rpn",
+    "calculator",
+    "auth0",
+    "authentication"
+  ],
   "author": "Gabriel Martins Alves",
   "license": "MIT"
 }
