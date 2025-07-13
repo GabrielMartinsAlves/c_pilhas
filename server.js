@@ -2,10 +2,96 @@ const express = require('express');
 const { auth, requiresAuth } = require('express-openid-connect');
 const { exec } = require('child_process');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Task monitoring system
+const taskMonitor = {
+  tasks: new Map(),
+  maxHistory: 100,
+  
+  createTask(expression, verbose, userId) {
+    const taskId = crypto.randomUUID();
+    const task = {
+      id: taskId,
+      expression,
+      verbose,
+      userId,
+      status: 'pending',
+      createdAt: new Date(),
+      startedAt: null,
+      completedAt: null,
+      result: null,
+      error: null,
+      processId: null,
+      duration: null
+    };
+    
+    this.tasks.set(taskId, task);
+    this.cleanupOldTasks();
+    console.log(`📝 Task created: ${taskId} - Expression: "${expression}" - User: ${userId}`);
+    return task;
+  },
+  
+  updateTask(taskId, updates) {
+    const task = this.tasks.get(taskId);
+    if (task) {
+      Object.assign(task, updates);
+      console.log(`🔄 Task updated: ${taskId} - Status: ${task.status}`);
+    }
+  },
+  
+  getTask(taskId) {
+    return this.tasks.get(taskId);
+  },
+  
+  getAllTasks(userId = null) {
+    const tasks = Array.from(this.tasks.values());
+    if (userId) {
+      return tasks.filter(task => task.userId === userId);
+    }
+    return tasks;
+  },
+  
+  getTasksByStatus(status, userId = null) {
+    return this.getAllTasks(userId).filter(task => task.status === status);
+  },
+  
+  cleanupOldTasks() {
+    if (this.tasks.size > this.maxHistory) {
+      const sortedTasks = Array.from(this.tasks.entries())
+        .sort((a, b) => new Date(a[1].createdAt) - new Date(b[1].createdAt));
+      
+      const tasksToRemove = sortedTasks.slice(0, this.tasks.size - this.maxHistory);
+      tasksToRemove.forEach(([taskId]) => {
+        this.tasks.delete(taskId);
+        console.log(`🗑️ Cleaned up old task: ${taskId}`);
+      });
+    }
+  },
+  
+  getStats() {
+    const tasks = this.getAllTasks();
+    const stats = {
+      total: tasks.length,
+      pending: tasks.filter(t => t.status === 'pending').length,
+      running: tasks.filter(t => t.status === 'running').length,
+      completed: tasks.filter(t => t.status === 'completed').length,
+      failed: tasks.filter(t => t.status === 'failed').length,
+      avgDuration: 0
+    };
+    
+    const completedTasks = tasks.filter(t => t.status === 'completed' && t.duration);
+    if (completedTasks.length > 0) {
+      stats.avgDuration = completedTasks.reduce((sum, t) => sum + t.duration, 0) / completedTasks.length;
+    }
+    
+    return stats;
+  }
+};
 
 // Auth0 configuration
 const config = {
@@ -238,6 +324,18 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         .clear-btn:hover {
           background: #545b62;
         }
+        .monitor-btn {
+          background: #6f42c1;
+        }
+        .monitor-btn:hover {
+          background: #5a359a;
+        }
+        .test-btn {
+          background: #fd7e14;
+        }
+        .test-btn:hover {
+          background: #e8590c;
+        }
         #result {
           background: rgba(255,255,255,0.1);
           padding: 20px;
@@ -269,6 +367,46 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           display: none;
           color: #ffc107;
         }
+        .task-monitor {
+          display: none;
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 10px;
+          margin-top: 20px;
+        }
+        .task-item {
+          background: rgba(255,255,255,0.1);
+          padding: 15px;
+          margin: 10px 0;
+          border-radius: 8px;
+          border-left: 4px solid #007bff;
+        }
+        .task-item.completed {
+          border-left-color: #28a745;
+        }
+        .task-item.failed {
+          border-left-color: #dc3545;
+        }
+        .task-item.running {
+          border-left-color: #ffc107;
+        }
+        .task-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 15px;
+          margin: 20px 0;
+        }
+        .stat-card {
+          background: rgba(255,255,255,0.1);
+          padding: 15px;
+          border-radius: 8px;
+          text-align: center;
+        }
+        .stat-value {
+          font-size: 1.5em;
+          font-weight: bold;
+          color: #28a745;
+        }
       </style>
     </head>
     <body>
@@ -295,10 +433,20 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           <button onclick="calculate(false)">Calcular</button>
           <button onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
           <button onclick="clearAll()" class="clear-btn">Limpar</button>
+          <button onclick="showTaskMonitor()" class="monitor-btn">Monitor de Tasks</button>
+          <button onclick="testWorker()" class="test-btn">Testar Worker</button>
         </div>
         
         <div class="loading" id="loading">🔄 Calculando...</div>
         <div id="result"></div>
+        
+        <!-- Task Monitor Section -->
+        <div class="task-monitor" id="taskMonitor">
+          <h3>📊 Monitor de Tasks</h3>
+          <div class="task-stats" id="taskStats"></div>
+          <div id="taskList"></div>
+          <button onclick="hideTaskMonitor()" class="clear-btn" style="margin-top: 20px;">Fechar Monitor</button>
+        </div>
         
         <div class="examples">
           <h3>Exemplos (clique para usar):</h3>
@@ -353,13 +501,109 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             loadingDiv.style.display = 'none';
             
             if (data.success) {
-              resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
+              resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado (Task ID: \${data.taskId}):</span>\\n\${data.output}\\n<small style="color: #6c757d;">Duração: \${data.duration}ms</small>\`;
             } else {
-              resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\`;
+              resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro (Task ID: \${data.taskId || 'N/A'}):</span>\\n\${data.error}\`;
             }
           } catch (error) {
             loadingDiv.style.display = 'none';
             resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro de conexão:</span>\\n\${error.message}\`;
+          }
+        }
+        
+        async function showTaskMonitor() {
+          const monitorDiv = document.getElementById('taskMonitor');
+          const statsDiv = document.getElementById('taskStats');
+          const listDiv = document.getElementById('taskList');
+          
+          try {
+            // Get stats
+            const statsResponse = await fetch('/api/monitor/stats');
+            const statsData = await statsResponse.json();
+            
+            if (statsData.success) {
+              const stats = statsData.userStats;
+              statsDiv.innerHTML = \`
+                <div class="stat-card">
+                  <div class="stat-value">\${stats.total}</div>
+                  <div>Total Tasks</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" style="color: #28a745;">\${stats.completed}</div>
+                  <div>Concluídas</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" style="color: #dc3545;">\${stats.failed}</div>
+                  <div>Falharam</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" style="color: #ffc107;">\${stats.running}</div>
+                  <div>Executando</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">\${Math.round(stats.avgDuration)}ms</div>
+                  <div>Duração Média</div>
+                </div>
+              \`;
+            }
+            
+            // Get tasks
+            const tasksResponse = await fetch('/api/tasks');
+            const tasksData = await tasksResponse.json();
+            
+            if (tasksData.success) {
+              const tasks = tasksData.tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              
+              listDiv.innerHTML = tasks.map(task => \`
+                <div class="task-item \${task.status}">
+                  <strong>Task ID:</strong> \${task.id}<br>
+                  <strong>Expressão:</strong> \${task.expression}<br>
+                  <strong>Status:</strong> \${task.status}<br>
+                  <strong>Criada em:</strong> \${new Date(task.createdAt).toLocaleString()}<br>
+                  \${task.duration ? \`<strong>Duração:</strong> \${task.duration}ms<br>\` : ''}
+                  \${task.error ? \`<strong>Erro:</strong> \${task.error}\` : ''}
+                </div>
+              \`).join('');
+            }
+            
+            monitorDiv.style.display = 'block';
+          } catch (error) {
+            listDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro ao carregar monitor: \${error.message}</span>\`;
+            monitorDiv.style.display = 'block';
+          }
+        }
+        
+        function hideTaskMonitor() {
+          document.getElementById('taskMonitor').style.display = 'none';
+        }
+        
+        async function testWorker() {
+          const resultDiv = document.getElementById('result');
+          const loadingDiv = document.getElementById('loading');
+          
+          loadingDiv.style.display = 'block';
+          resultDiv.innerHTML = '';
+          
+          try {
+            const response = await fetch('/api/test/worker', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ testExpression: '2 3 +' })
+            });
+            
+            const data = await response.json();
+            loadingDiv.style.display = 'none';
+            
+            if (data.success) {
+              resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Teste de Worker Concluído (Task ID: \${data.taskId}):</span>\\n\${data.output}\\n<small style="color: #6c757d;">Duração: \${data.duration}ms | PID: \${data.processId}</small>\`;
+            } else {
+              resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Teste de Worker Falhou (Task ID: \${data.taskId}):</span>\\n\${data.error}\\n<small style="color: #6c757d;">Duração: \${data.duration}ms</small>\`;
+            }
+          } catch (error) {
+            loadingDiv.style.display = 'none';
+            resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro no teste de worker:</span>\\n\${error.message}\`;
           }
         }
         
@@ -375,28 +619,61 @@ app.get('/calculator', requiresAuth(), (req, res) => {
   `);
 });
 
-// API endpoint to execute RPN calculator
+// API endpoint to execute RPN calculator with task monitoring
 app.post('/api/calculate', requiresAuth(), (req, res) => {
   const { expression, verbose } = req.body;
+  const userId = req.oidc.user.sub || req.oidc.user.email;
   
   if (!expression || typeof expression !== 'string') {
     return res.json({ success: false, error: 'Expressão inválida' });
   }
   
+  // Create monitored task
+  const task = taskMonitor.createTask(expression, verbose, userId);
+  
   // Create a temporary input file for the C program
   const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
-  // Execute the C program
+  // Update task status to running
+  taskMonitor.updateTask(task.id, { 
+    status: 'running', 
+    startedAt: new Date() 
+  });
+  
+  // Execute the C program with monitoring
   const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
+    const completedAt = new Date();
+    const duration = completedAt - task.startedAt;
+    
     if (error) {
-      console.error('Execution error:', error);
-      return res.json({ success: false, error: 'Erro na execução do cálculo' });
+      console.error(`❌ Task ${task.id} failed:`, error);
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: error.message,
+        completedAt,
+        duration
+      });
+      return res.json({ 
+        success: false, 
+        error: 'Erro na execução do cálculo',
+        taskId: task.id
+      });
     }
     
     if (stderr) {
-      console.error('Stderr:', stderr);
-      return res.json({ success: false, error: stderr });
+      console.error(`❌ Task ${task.id} stderr:`, stderr);
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: stderr,
+        completedAt,
+        duration
+      });
+      return res.json({ 
+        success: false, 
+        error: stderr,
+        taskId: task.id
+      });
     }
     
     // Parse the output to extract the result
@@ -405,16 +682,228 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     // Check for error messages in the output
     if (output.includes('Erro:') || output.includes('Error:')) {
       const errorMatch = output.match(/Erro:.*|Error:.*/);
+      const errorMsg = errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo';
+      
+      console.error(`❌ Task ${task.id} calculation error:`, errorMsg);
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: errorMsg,
+        completedAt,
+        duration
+      });
+      
       return res.json({ 
         success: false, 
-        error: errorMatch ? errorMatch[0] : 'Erro desconhecido no cálculo' 
+        error: errorMsg,
+        taskId: task.id
       });
     }
     
-    res.json({ success: true, output: output });
+    // Success
+    console.log(`✅ Task ${task.id} completed successfully in ${duration}ms`);
+    taskMonitor.updateTask(task.id, {
+      status: 'completed',
+      result: output,
+      completedAt,
+      duration
+    });
+    
+    res.json({ 
+      success: true, 
+      output: output,
+      taskId: task.id,
+      duration
+    });
   });
   
+  // Store process ID for monitoring
+  taskMonitor.updateTask(task.id, { processId: child.pid });
+  console.log(`🚀 Task ${task.id} started with PID: ${child.pid}`);
+  
   // Send input to the C program
+  child.stdin.write(inputData);
+  child.stdin.end();
+});
+
+// Task monitoring API endpoints
+app.get('/api/tasks', requiresAuth(), (req, res) => {
+  const userId = req.oidc.user.sub || req.oidc.user.email;
+  const tasks = taskMonitor.getAllTasks(userId);
+  
+  res.json({
+    success: true,
+    tasks: tasks.map(task => ({
+      id: task.id,
+      expression: task.expression,
+      status: task.status,
+      createdAt: task.createdAt,
+      startedAt: task.startedAt,
+      completedAt: task.completedAt,
+      duration: task.duration,
+      error: task.error
+    }))
+  });
+});
+
+app.get('/api/tasks/:taskId', requiresAuth(), (req, res) => {
+  const { taskId } = req.params;
+  const userId = req.oidc.user.sub || req.oidc.user.email;
+  const task = taskMonitor.getTask(taskId);
+  
+  if (!task || task.userId !== userId) {
+    return res.status(404).json({ success: false, error: 'Task not found' });
+  }
+  
+  res.json({
+    success: true,
+    task: {
+      id: task.id,
+      expression: task.expression,
+      verbose: task.verbose,
+      status: task.status,
+      createdAt: task.createdAt,
+      startedAt: task.startedAt,
+      completedAt: task.completedAt,
+      duration: task.duration,
+      result: task.result,
+      error: task.error,
+      processId: task.processId
+    }
+  });
+});
+
+app.get('/api/tasks/status/:status', requiresAuth(), (req, res) => {
+  const { status } = req.params;
+  const userId = req.oidc.user.sub || req.oidc.user.email;
+  const tasks = taskMonitor.getTasksByStatus(status, userId);
+  
+  res.json({
+    success: true,
+    tasks: tasks.map(task => ({
+      id: task.id,
+      expression: task.expression,
+      status: task.status,
+      createdAt: task.createdAt,
+      duration: task.duration
+    }))
+  });
+});
+
+app.get('/api/monitor/stats', requiresAuth(), (req, res) => {
+  const userId = req.oidc.user.sub || req.oidc.user.email;
+  const userTasks = taskMonitor.getAllTasks(userId);
+  const globalStats = taskMonitor.getStats();
+  
+  const userStats = {
+    total: userTasks.length,
+    pending: userTasks.filter(t => t.status === 'pending').length,
+    running: userTasks.filter(t => t.status === 'running').length,
+    completed: userTasks.filter(t => t.status === 'completed').length,
+    failed: userTasks.filter(t => t.status === 'failed').length,
+    avgDuration: 0
+  };
+  
+  const completedUserTasks = userTasks.filter(t => t.status === 'completed' && t.duration);
+  if (completedUserTasks.length > 0) {
+    userStats.avgDuration = completedUserTasks.reduce((sum, t) => sum + t.duration, 0) / completedUserTasks.length;
+  }
+  
+  res.json({
+    success: true,
+    userStats,
+    globalStats
+  });
+});
+
+// Individual worker test endpoint
+app.post('/api/test/worker', requiresAuth(), (req, res) => {
+  const { testExpression = '2 3 +' } = req.body;
+  const userId = req.oidc.user.sub || req.oidc.user.email;
+  
+  console.log(`🧪 Starting individual worker test for user: ${userId}`);
+  
+  // Create test task
+  const task = taskMonitor.createTask(`TEST: ${testExpression}`, false, userId);
+  
+  const inputData = `1\n${testExpression}\n4\n`;
+  const calculatorPath = path.join(__dirname, 'rpn_calculator');
+  
+  taskMonitor.updateTask(task.id, { 
+    status: 'running', 
+    startedAt: new Date() 
+  });
+  
+  const child = exec(calculatorPath, { timeout: 5000 }, (error, stdout, stderr) => {
+    const completedAt = new Date();
+    const duration = completedAt - task.startedAt;
+    
+    const testResult = {
+      taskId: task.id,
+      expression: testExpression,
+      duration,
+      processId: child.pid,
+      success: false,
+      output: null,
+      error: null
+    };
+    
+    if (error) {
+      console.error(`❌ Worker test ${task.id} failed:`, error);
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: error.message,
+        completedAt,
+        duration
+      });
+      testResult.error = error.message;
+      return res.json(testResult);
+    }
+    
+    if (stderr) {
+      console.error(`❌ Worker test ${task.id} stderr:`, stderr);
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: stderr,
+        completedAt,
+        duration
+      });
+      testResult.error = stderr;
+      return res.json(testResult);
+    }
+    
+    const output = stdout.toString();
+    
+    if (output.includes('Erro:') || output.includes('Error:')) {
+      const errorMatch = output.match(/Erro:.*|Error:.*/);
+      const errorMsg = errorMatch ? errorMatch[0] : 'Erro desconhecido';
+      
+      taskMonitor.updateTask(task.id, {
+        status: 'failed',
+        error: errorMsg,
+        completedAt,
+        duration
+      });
+      testResult.error = errorMsg;
+      return res.json(testResult);
+    }
+    
+    // Test passed
+    console.log(`✅ Worker test ${task.id} completed successfully in ${duration}ms`);
+    taskMonitor.updateTask(task.id, {
+      status: 'completed',
+      result: output,
+      completedAt,
+      duration
+    });
+    
+    testResult.success = true;
+    testResult.output = output;
+    res.json(testResult);
+  });
+  
+  taskMonitor.updateTask(task.id, { processId: child.pid });
+  console.log(`🚀 Worker test ${task.id} started with PID: ${child.pid}`);
+  
   child.stdin.write(inputData);
   child.stdin.end();
 });
