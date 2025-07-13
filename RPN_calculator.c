@@ -265,7 +265,8 @@ int main() {
                 }
                 
                 // Cria backup para modo verbose
-                strcpy(backup, expressao);
+                strncpy(backup, expressao, sizeof(backup) - 1);
+                backup[sizeof(backup) - 1] = '\0';
                 
                 printf("\nCalculando...\n");
                 resultado = avaliaRPN(expressao, opcao == 2);

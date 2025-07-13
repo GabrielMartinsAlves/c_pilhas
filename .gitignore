@@ -56,3 +56,7 @@ a.out
 # Temporary files
 *.tmp
 *.temp
+
+# Security reports (optional - remove if you want to track them)
+security/reports/*.json
+security/reports/*.html
