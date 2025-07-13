@@ -380,13 +380,29 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
   const { expression, verbose } = req.body;
   
   if (!expression || typeof expression !== 'string') {
-    return res.json({ success: false, error: 'Expressão inválida' });
+    return res.json({ success: false, error: 'Por favor, digite uma expressão RPN válida.' });
   }
   
   // Sanitize input - allow only numbers, spaces, and valid operators
   const sanitizedExpression = expression.trim();
+  if (!sanitizedExpression) {
+    return res.json({ success: false, error: 'Expressão vazia. Digite uma expressão RPN válida.' });
+  }
+  
   if (!/^[0-9\s+\-*/^.]+$/.test(sanitizedExpression)) {
-    return res.json({ success: false, error: 'Expressão contém caracteres inválidos' });
+    return res.json({ 
+      success: false, 
+      error: 'Expressão contém caracteres inválidos. Use apenas números, espaços e operadores (+, -, *, /, ^).' 
+    });
+  }
+  
+  // Check for minimum valid expression (at least one number and one operator)
+  const tokens = sanitizedExpression.split(/\s+/).filter(token => token.length > 0);
+  if (tokens.length < 3) {
+    return res.json({ 
+      success: false, 
+      error: 'Expressão muito curta. Uma expressão RPN precisa de pelo menos 2 números e 1 operador (ex: "3 4 +").' 
+    });
   }
   
   const calculatorPath = path.join(__dirname, 'rpn_calculator');

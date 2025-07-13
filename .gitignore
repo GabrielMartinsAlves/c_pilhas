@@ -59,3 +59,4 @@ a.out
 
 # Test scripts
 test_calculator.sh
+test_web_api.sh
