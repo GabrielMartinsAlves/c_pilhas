@@ -1,6 +1,6 @@
 const express = require('express');
 const { auth, requiresAuth } = require('express-openid-connect');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const path = require('path');
 require('dotenv').config();
 
@@ -383,24 +383,37 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     return res.json({ success: false, error: 'Expressão inválida' });
   }
   
-  // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  // Create input sequence for the C program - FIXED VERSION
+  // The C program expects: option -> expression -> enter_to_continue -> exit_option
+  const option = verbose ? '2' : '1';
+  const inputSequence = `${option}\n${expression}\n\n4\n`;
+  
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
-  // Execute the C program
-  const child = exec(calculatorPath, { timeout: 10000 }, (error, stdout, stderr) => {
-    if (error) {
-      console.error('Execution error:', error);
+  // Use spawn for better control over stdin/stdout
+  const child = spawn(calculatorPath, [], { timeout: 10000 });
+  
+  let output = '';
+  let errorOutput = '';
+  
+  child.stdout.on('data', (data) => {
+    output += data.toString();
+  });
+  
+  child.stderr.on('data', (data) => {
+    errorOutput += data.toString();
+  });
+  
+  child.on('close', (code) => {
+    if (code !== 0) {
+      console.error('Process exited with code:', code);
       return res.json({ success: false, error: 'Erro na execução do cálculo' });
     }
     
-    if (stderr) {
-      console.error('Stderr:', stderr);
-      return res.json({ success: false, error: stderr });
+    if (errorOutput) {
+      console.error('Stderr:', errorOutput);
+      return res.json({ success: false, error: errorOutput });
     }
-    
-    // Parse the output to extract the result
-    const output = stdout.toString();
     
     // Check for error messages in the output
     if (output.includes('Erro:') || output.includes('Error:')) {
@@ -414,8 +427,13 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
     res.json({ success: true, output: output });
   });
   
+  child.on('error', (error) => {
+    console.error('Process error:', error);
+    res.json({ success: false, error: 'Erro na execução do cálculo' });
+  });
+  
   // Send input to the C program
-  child.stdin.write(inputData);
+  child.stdin.write(inputSequence);
   child.stdin.end();
 });
 
