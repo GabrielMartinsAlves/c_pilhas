@@ -124,6 +124,7 @@ app.get('/', (req, res) => {
               <li>Modo verbose para análise passo-a-passo</li>
               <li>Interface web intuitiva</li>
               <li>Autenticação segura com Auth0</li>
+              <li>Salvar histórico de cálculos</li>
             </ul>
           </div>
           
@@ -232,6 +233,16 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         .verbose-btn:hover {
           background: #138496;
         }
+        .save-btn {
+          background: #28a745;
+        }
+        .save-btn:hover {
+          background: #218838;
+        }
+        .save-btn:disabled {
+          background: #6c757d;
+          cursor: not-allowed;
+        }
         .clear-btn {
           background: #6c757d;
         }
@@ -269,6 +280,81 @@ app.get('/calculator', requiresAuth(), (req, res) => {
           display: none;
           color: #ffc107;
         }
+        .saved-calculations {
+          margin-top: 30px;
+          background: rgba(255,255,255,0.1);
+          padding: 20px;
+          border-radius: 10px;
+        }
+        .saved-controls {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+        .toggle-btn {
+          background: #007bff;
+          color: white;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .toggle-btn:hover {
+          background: #0056b3;
+        }
+        .delete-btn {
+          background: #dc3545;
+          color: white;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .delete-btn:hover {
+          background: #c82333;
+        }
+        .saved-item {
+          background: rgba(255,255,255,0.1);
+          padding: 15px;
+          margin: 10px 0;
+          border-radius: 8px;
+          border-left: 4px solid #28a745;
+        }
+        .saved-expression {
+          font-family: 'Courier New', monospace;
+          font-weight: bold;
+          color: #ffc107;
+        }
+        .saved-result {
+          font-family: 'Courier New', monospace;
+          color: #28a745;
+          margin: 5px 0;
+        }
+        .saved-date {
+          font-size: 12px;
+          color: #adb5bd;
+        }
+        .saved-actions {
+          margin-top: 10px;
+        }
+        .reuse-btn, .remove-btn {
+          background: #6c757d;
+          color: white;
+          padding: 4px 8px;
+          border: none;
+          border-radius: 3px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-right: 5px;
+        }
+        .reuse-btn:hover {
+          background: #545b62;
+        }
+        .remove-btn:hover {
+          background: #dc3545;
+        }
       </style>
     </head>
     <body>
@@ -294,11 +380,21 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         <div class="btn-group">
           <button onclick="calculate(false)">Calcular</button>
           <button onclick="calculate(true)" class="verbose-btn">Calcular (Verbose)</button>
+          <button onclick="saveResult()" class="save-btn" id="saveBtn" disabled>Salvar Resultado</button>
           <button onclick="clearAll()" class="clear-btn">Limpar</button>
         </div>
         
         <div class="loading" id="loading">🔄 Calculando...</div>
         <div id="result"></div>
+        
+        <div class="saved-calculations" id="savedSection" style="display: none;">
+          <h3>📋 Cálculos Salvos</h3>
+          <div class="saved-controls">
+            <button onclick="toggleSavedCalculations()" class="toggle-btn">Ver Salvos</button>
+            <button onclick="clearSavedCalculations()" class="delete-btn">Limpar Todos</button>
+          </div>
+          <div id="savedList"></div>
+        </div>
         
         <div class="examples">
           <h3>Exemplos (clique para usar):</h3>
@@ -318,6 +414,8 @@ app.get('/calculator', requiresAuth(), (req, res) => {
       </div>
       
       <script>
+        let lastCalculation = null;
+        
         function useExample(expression) {
           document.getElementById('expression').value = expression;
         }
@@ -325,20 +423,118 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         function clearAll() {
           document.getElementById('expression').value = '';
           document.getElementById('result').innerHTML = '';
+          document.getElementById('saveBtn').disabled = true;
+          lastCalculation = null;
+        }
+        
+        function saveResult() {
+          if (!lastCalculation) {
+            alert('Nenhum resultado para salvar!');
+            return;
+          }
+          
+          const savedCalculations = getSavedCalculations();
+          const newCalculation = {
+            id: Date.now(),
+            expression: lastCalculation.expression,
+            result: lastCalculation.result,
+            verbose: lastCalculation.verbose,
+            timestamp: new Date().toLocaleString('pt-BR')
+          };
+          
+          savedCalculations.push(newCalculation);
+          localStorage.setItem('rpn_calculations', JSON.stringify(savedCalculations));
+          
+          alert('Resultado salvo com sucesso!');
+          updateSavedCalculationsList();
+          showSavedSection();
+        }
+        
+        function getSavedCalculations() {
+          const saved = localStorage.getItem('rpn_calculations');
+          return saved ? JSON.parse(saved) : [];
+        }
+        
+        function showSavedSection() {
+          const section = document.getElementById('savedSection');
+          section.style.display = 'block';
+          updateSavedCalculationsList();
+        }
+        
+        function toggleSavedCalculations() {
+          const section = document.getElementById('savedSection');
+          const list = document.getElementById('savedList');
+          
+          if (list.style.display === 'none' || list.style.display === '') {
+            list.style.display = 'block';
+            updateSavedCalculationsList();
+            document.querySelector('.toggle-btn').textContent = 'Ocultar Salvos';
+          } else {
+            list.style.display = 'none';
+            document.querySelector('.toggle-btn').textContent = 'Ver Salvos';
+          }
+        }
+        
+        function updateSavedCalculationsList() {
+          const savedCalculations = getSavedCalculations();
+          const listDiv = document.getElementById('savedList');
+          
+          if (savedCalculations.length === 0) {
+            listDiv.innerHTML = '<p style="color: #adb5bd; font-style: italic;">Nenhum cálculo salvo ainda.</p>';
+            return;
+          }
+          
+          listDiv.innerHTML = savedCalculations
+            .sort((a, b) => b.id - a.id)
+            .map(calc => 
+              \`<div class="saved-item">
+                <div class="saved-expression">Expressão: \${calc.expression}</div>
+                <div class="saved-result">Resultado: \${calc.result}</div>
+                <div class="saved-date">Salvo em: \${calc.timestamp}</div>
+                <div class="saved-actions">
+                  <button class="reuse-btn" onclick="reuseCalculation('\${calc.expression}')">Reutilizar</button>
+                  <button class="remove-btn" onclick="removeCalculation(\${calc.id})">Remover</button>
+                </div>
+              </div>\`
+            ).join('');
+        }
+        
+        function reuseCalculation(expression) {
+          document.getElementById('expression').value = expression;
+        }
+        
+        function removeCalculation(id) {
+          if (confirm('Deseja realmente remover este cálculo salvo?')) {
+            let savedCalculations = getSavedCalculations();
+            savedCalculations = savedCalculations.filter(calc => calc.id !== id);
+            localStorage.setItem('rpn_calculations', JSON.stringify(savedCalculations));
+            updateSavedCalculationsList();
+          }
+        }
+        
+        function clearSavedCalculations() {
+          if (confirm('Deseja realmente apagar todos os cálculos salvos?')) {
+            localStorage.removeItem('rpn_calculations');
+            updateSavedCalculationsList();
+          }
         }
         
         async function calculate(verbose) {
           const expression = document.getElementById('expression').value.trim();
           const resultDiv = document.getElementById('result');
           const loadingDiv = document.getElementById('loading');
+          const saveBtn = document.getElementById('saveBtn');
           
           if (!expression) {
             resultDiv.innerHTML = '<span style="color: #dc3545;">❌ Por favor, digite uma expressão!</span>';
+            saveBtn.disabled = true;
+            lastCalculation = null;
             return;
           }
           
           loadingDiv.style.display = 'block';
           resultDiv.innerHTML = '';
+          saveBtn.disabled = true;
           
           try {
             const response = await fetch('/api/calculate', {
@@ -354,12 +550,40 @@ app.get('/calculator', requiresAuth(), (req, res) => {
             
             if (data.success) {
               resultDiv.innerHTML = \`<span style="color: #28a745;">✅ Resultado:</span>\\n\${data.output}\`;
+              
+              // Extract the numerical result for saving - find number after "Resultado"
+              const lines = data.output.split('\\n');
+              let numericalResult = 'N/A';
+              
+              for (const line of lines) {
+                if (line.includes('Resultado')) {
+                  // Find all numbers in the line and take the last one (should be the result)
+                  const numbers = line.match(/-?\d+(?:\.\d+)?/g);
+                  if (numbers && numbers.length > 0) {
+                    numericalResult = numbers[numbers.length - 1];
+                    break;
+                  }
+                }
+              }
+              
+              lastCalculation = {
+                expression: expression,
+                result: numericalResult,
+                verbose: verbose,
+                fullOutput: data.output
+              };
+              
+              saveBtn.disabled = false;
             } else {
               resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro:</span>\\n\${data.error}\`;
+              saveBtn.disabled = true;
+              lastCalculation = null;
             }
           } catch (error) {
             loadingDiv.style.display = 'none';
             resultDiv.innerHTML = \`<span style="color: #dc3545;">❌ Erro de conexão:</span>\\n\${error.message}\`;
+            saveBtn.disabled = true;
+            lastCalculation = null;
           }
         }
         
@@ -367,6 +591,14 @@ app.get('/calculator', requiresAuth(), (req, res) => {
         document.getElementById('expression').addEventListener('keypress', function(e) {
           if (e.key === 'Enter') {
             calculate(false);
+          }
+        });
+        
+        // Initialize saved calculations on page load
+        window.addEventListener('load', function() {
+          const savedCalculations = getSavedCalculations();
+          if (savedCalculations.length > 0) {
+            showSavedSection();
           }
         });
       </script>
@@ -384,7 +616,7 @@ app.post('/api/calculate', requiresAuth(), (req, res) => {
   }
   
   // Create a temporary input file for the C program
-  const inputData = verbose ? '2\n' + expression + '\n4\n' : '1\n' + expression + '\n4\n';
+  const inputData = verbose ? '2\n' + expression + '\n\n4\n' : '1\n' + expression + '\n\n4\n';
   const calculatorPath = path.join(__dirname, 'rpn_calculator');
   
   // Execute the C program
