@@ -312,6 +312,49 @@ Possível extensão para funções como `sin`, `cos`, `log`, `sqrt` através de:
 3. **State Machine**: Parser de tokens com estados
 4. **Error Handling**: Propagação estruturada de erros
 
+## Segurança e Verificação
+
+### 🔐 Sistema de Verificação de Segurança
+
+Este projeto inclui um sistema abrangente de verificação de segurança que implementa:
+
+#### Análise de Dependências
+- Verificação automática de vulnerabilidades em dependências npm
+- Análise de dependências do sistema
+- Recomendações de atualização de segurança
+
+#### Análise Estática de Código
+- Análise de segurança para código C e JavaScript
+- Detecção de padrões inseguros (buffer overflow, XSS, injeção de código)
+- Avaliação de qualidade e segurança do código
+
+#### Testes de Penetração
+- Testes de segurança da aplicação web
+- Verificação de cabeçalhos de segurança
+- Testes de validação de entrada e autenticação
+
+### Execução da Verificação de Segurança
+
+```bash
+# Verificação completa de segurança
+npm run security
+
+# Verificações individuais
+npm run security:deps      # Análise de dependências
+npm run security:static    # Análise estática de código
+npm run security:pentest   # Testes de penetração
+npm run security:report    # Geração de relatório consolidado
+```
+
+### Relatórios Gerados
+
+Os relatórios são salvos em `security/reports/`:
+- `security-report.html` - Relatório visual consolidado
+- `security-report-comprehensive.json` - Dados técnicos completos
+- Relatórios individuais por tipo de análise
+
+Para mais detalhes, consulte a [documentação de segurança](security/README.md).
+
 ## Considerações de Segurança
 
 ### Validação de Entrada
